@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MANA | Manila Advisory Network Alert</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="auth-shell" id="authView">
+    <section class="auth-hero">
+      <div>
+        <div class="brand-mark">
+          <div class="brand-mark-badge">M</div>
+          <div class="brand-mark-copy">
+            <h1>MANA</h1>
+            <p>Manila Advisory Network Alert</p>
+          </div>
+        </div>
+        <div class="hero-copy">
+          <div class="hero-kicker">Disaster Response Social Media Analytics</div>
+          <h2>LGU-ready intelligence for fast crisis decisions.</h2>
+          <p>MANA transforms Facebook and X posts into cluster-based emergency insight, sentiment scoring, priority monitoring, and action-ready recommendations for local government disaster teams.</p>
+          <div class="hero-grid">
+            <div class="hero-mini">
+              <div class="hero-mini-label">Sources monitored</div>
+              <div class="hero-mini-value">Facebook + X</div>
+            </div>
+            <div class="hero-mini">
+              <div class="hero-mini-label">Operational clusters</div>
+              <div class="hero-mini-value">8 Active</div>
+            </div>
+            <div class="hero-mini">
+              <div class="hero-mini-label">Decision latency</div>
+              <div class="hero-mini-value">Near Real-time</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hero-strip">
+        <div class="hero-card">
+          <h3>Mission Control View</h3>
+          <ul>
+            <li><strong>Priority scoring</strong><span>Critical, high, and monitoring-level post triage</span></li>
+            <li><strong>Cluster intelligence</strong><span>Direct pages for operational cluster review</span></li>
+            <li><strong>LGU action flow</strong><span>Pinned watchlists, status tracking, and recommendations</span></li>
+          </ul>
+        </div>
+        <div class="hero-card">
+          <h3>Monitoring Focus</h3>
+          <ul>
+            <li><strong>Keyword surges</strong><span>Food, rescue, WASH, shelter, signal loss</span></li>
+            <li><strong>Sentiment shifts</strong><span>Distress, urgent, negative, neutral, positive</span></li>
+            <li><strong>Cluster alerts</strong><span>Operational view for incident escalation</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="auth-panel">
+      <div>
+        <h3>Sign in to MANA</h3>
+        <p>Access the decision support dashboard for Manila disaster monitoring, cluster coordination, and live social intelligence review.</p>
+      </div>
+
+      <form class="form-stack" id="loginForm">
+        <div class="field">
+          <label for="loginIdentity">Username or email</label>
+          <input id="loginIdentity" type="text" placeholder="lgu.analyst@mana.ph" autocomplete="username">
+        </div>
+
+        <div class="field">
+          <label for="loginPassword">Password</label>
+          <div class="input-wrap">
+            <input id="loginPassword" type="password" placeholder="Enter your password" autocomplete="current-password">
+            <button class="icon-toggle" type="button" data-toggle-password="loginPassword" aria-label="Show password">
+              <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="check-wrap">
+            <input type="checkbox" id="rememberSession">
+            <span>Remember me for 30 days</span>
+          </label>
+          <button class="link-btn" type="button" data-action="forgot-password">Forgot password?</button>
+        </div>
+
+        <div class="captcha-box">
+          <div class="captcha-head">
+            <div>
+              <h4>CAPTCHA Verification</h4>
+              <div class="captcha-note">Enter the verification code exactly as shown below before signing in.</div>
+            </div>
+            <button class="refresh-btn" type="button" data-action="refresh-captcha" aria-label="Refresh captcha">
+              <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.36 6.36L3 16"></path><path d="M3 12A9 9 0 0 1 18.36 5.64L21 8"></path><path d="M3 16v-4h4"></path><path d="M21 8v4h-4"></path></svg>
+            </button>
+          </div>
+          <div class="captcha-code" id="captchaCode">M4N4X</div>
+          <div class="field">
+            <label for="captchaInput">Verification code</label>
+            <input id="captchaInput" type="text" placeholder="Type the CAPTCHA code">
+          </div>
+        </div>
+
+        <button class="primary-btn" type="submit">Secure Sign In</button>
+      </form>
+
+      <div class="auth-footer">
+        Protected thesis prototype for LGU disaster monitoring. Session persistence is simulated locally for up to 30 days when remember-me is enabled.
+      </div>
+    </section>
+  </div>
+
+  <div class="app-shell hidden" id="appView">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-inner">
+        <div class="sidebar-top">
+          <div class="sidebar-brand">
+            <div class="brand-mark-badge">M</div>
+            <div class="sidebar-brand-copy">
+              <h1>MANA</h1>
+              <p>Decision Support Console</p>
+            </div>
+          </div>
+          <button class="sidebar-toggle" type="button" data-action="toggle-sidebar" aria-label="Toggle sidebar">
+            <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"></path></svg>
+          </button>
+        </div>
+
+        <div class="status-strip">
+          <small>Operations status</small>
+          <strong>Metro Manila multi-source emergency monitoring active.</strong>
+          <span>Facebook and X ingestion aligned with cluster scoring, sentiment review, and live alert prioritization.</span>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-section">Workspace</div>
+          <div class="nav-stack">
+            <button class="nav-btn active" type="button" data-nav="dashboard">
+              <span class="nav-btn-title">Dashboard</span>
+              <span class="nav-btn-meta">Executive overview, signals, trending posts, and tracked comments</span>
+            </button>
+            <button class="nav-btn" type="button" data-nav="analytics">
+              <span class="nav-btn-title">Analytics</span>
+              <span class="nav-btn-meta">Sentiment histogram, trend shifts, and cluster performance movement</span>
+            </button>
+            <button class="nav-btn" type="button" data-nav="alerts">
+              <span class="nav-btn-title">Live Alerts</span>
+              <span class="nav-btn-meta">Critical and high-severity cluster incidents requiring review</span>
+            </button>
+            <button class="nav-btn" type="button" data-nav="watchlist">
+              <span class="nav-btn-title">Saved Intelligence</span>
+              <span class="nav-btn-meta">Pinned posts sorted by operational urgency</span>
+            </button>
+            <button class="nav-btn" type="button" data-nav="settings">
+              <span class="nav-btn-title">Settings</span>
+              <span class="nav-btn-meta">Theme controls, password changes, and interface preferences</span>
+            </button>
+          </div>
+
+          <div class="nav-section">Operation Clusters</div>
+          <div class="nav-stack" id="clusterNav"></div>
+        </div>
+
+      </div>
+    </aside>
+
+    <div class="mobile-overlay" data-action="close-sidebar"></div>
+
+    <div class="workspace">
+      <div class="app-bg-grid"></div>
+
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="sidebar-toggle" type="button" data-action="toggle-sidebar" aria-label="Open sidebar">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path></svg>
+          </button>
+          <div class="topbar-copy">
+            <small id="topbarEyebrow">Dashboard</small>
+            <strong id="topbarTitle">MANA command overview</strong>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <div class="search-shell">
+            <input id="globalSearch" type="text" placeholder="Search posts, keywords, locations">
+            <button class="search-btn" type="button" aria-label="Search">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+            </button>
+          </div>
+          <div class="topbar-chip" id="topbarClock">Updated 26 Apr 2026</div>
+          <div class="topbar-chip" id="topbarRole">LGU Analyst</div>
+        </div>
+      </header>
+
+      <main class="main">
+        <section class="page active" data-page="dashboard">
+          <div class="page-head">
+            <div>
+              <div class="eyebrow">Operational Overview</div>
+              <h2>Disaster intelligence dashboard</h2>
+              <p>Quick view of urgent posts, active clusters, top keywords, and helpful social media updates for LGU teams.</p>
+            </div>
+            <div class="page-meta">
+              <div class="page-chip">Coverage: Metro Manila</div>
+              <div class="page-chip">Sources: Facebook and X</div>
+              <div class="page-chip">Mode: Live Monitoring</div>
+            </div>
+          </div>
+
+          <div class="dashboard-controls">
+            <div class="page-chip">Summary cards</div>
+            <div class="filter-block inline-select">
+              <label class="filter-label" for="dashboardRange">Date range</label>
+              <select class="filter-control" id="dashboardRange">
+                <option value="24h">Last 24 hours</option>
+                <option value="7d" selected>Last 7 days</option>
+                <option value="14d">Last 14 days</option>
+                <option value="30d">Last 30 days</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="kpi-grid" id="kpiGrid"></div>
+
+          <div class="dashboard-grid">
+            <div class="dashboard-stack">
+              <div class="surface tone-blue">
+                <div class="surface-header">
+                  <div>
+                    <div class="surface-title">Top detected keywords</div>
+                    <div class="surface-subtitle">Most common words found in recent posts</div>
+                  </div>
+                </div>
+                <div class="keyword-grid" id="keywordGrid"></div>
+              </div>
+
+              <div class="surface tone-gold">
+              <div class="surface-header">
+                <div>
+                  <div class="surface-title">Trending posts</div>
+                  <div class="surface-subtitle">Posts getting attention and needing review</div>
+                </div>
+              </div>
+              <div class="feed-list" id="dashboardPosts"></div>
+            </div>
+
+          </div>
+
+            <div class="dashboard-stack">
+              <div class="surface tone-green">
+                <div class="surface-header">
+                  <div>
+                    <div class="surface-title">Trending comments</div>
+                    <div class="surface-subtitle">Repeated needs seen in comments</div>
+                  </div>
+                </div>
+                <div class="comment-list" id="dashboardComments"></div>
+              </div>
+
+            <div class="surface tone-slate">
+              <div class="surface-header">
+                <div>
+                  <div class="surface-title">Source pages and accounts</div>
+                  <div class="surface-subtitle">Pages and accounts where the posts came from</div>
+                </div>
+              </div>
+              <div class="source-directory" id="sourceDirectory"></div>
+            </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" data-page="analytics">
+          <div class="page-head">
+            <div>
+              <div class="eyebrow">Signal Analysis</div>
+              <h2>Analytics and trend performance</h2>
+              <p>Simple charts to track sentiment, cluster activity, and urgency over time.</p>
+            </div>
+            <div class="page-meta">
+              <div class="page-chip">Interactive charts</div>
+              <div class="page-chip">Date filter ready</div>
+            </div>
+          </div>
+
+          <div class="panel tone-blue">
+            <div class="filters-row">
+              <div class="filter-block inline-select">
+                <label class="filter-label" for="analyticsRange">Date range</label>
+                <select class="filter-control" id="analyticsRange">
+                  <option value="7d">Last 7 days</option>
+                  <option value="14d" selected>Last 14 days</option>
+                  <option value="30d">Last 30 days</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="analytics-grid">
+            <div class="chart-card tone-blue">
+              <div class="chart-title-row">
+                <div>
+                  <strong>Sentiment Distribution Histogram</strong>
+                  <span>Shows how many posts fall into each sentiment score bin.</span>
+                </div>
+              </div>
+              <div class="histogram-legend">
+                <span><i class="legend-dot" style="background:#ef4444;"></i>Negative bins</span>
+                <span><i class="legend-dot" style="background:#f59e0b;"></i>Neutral bins</span>
+                <span><i class="legend-dot" style="background:#10b981;"></i>Positive bins</span>
+              </div>
+              <div class="histogram" id="sentimentHistogram"></div>
+            </div>
+
+            <div class="chart-card tone-green">
+              <div class="chart-title-row">
+                <div>
+                  <strong>Sentiment Trend Over Time</strong>
+                  <span>Tracks positive, neutral, and negative signals each day.</span>
+                </div>
+              </div>
+              <div class="line-legend" id="sentimentTrendLegend"></div>
+              <div class="line-chart-shell" id="sentimentTrendChart"></div>
+            </div>
+
+            <div class="chart-card tone-gold">
+              <div class="chart-title-row">
+                <div>
+                  <strong>Cluster Activity Distribution</strong>
+                  <span>Shows which response cluster has the most posts.</span>
+                </div>
+              </div>
+              <div class="cluster-bars" id="clusterActivityChart"></div>
+            </div>
+
+            <div class="chart-card tone-red">
+              <div class="chart-title-row">
+                <div>
+                  <strong>Priority Level Distribution</strong>
+                  <span>Shows low, medium, high, and critical post levels.</span>
+                </div>
+              </div>
+              <div id="priorityDistributionChart"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="page" data-page="alerts">
+          <div class="page-head">
+            <div>
+              <div class="eyebrow">Escalation Monitor</div>
+              <h2>Live alerts and severity watch</h2>
+              <p>View the most urgent clusters and the posts that need fast action.</p>
+            </div>
+            <div class="page-meta">
+              <div class="page-chip">Severity: Critical and High</div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="filters-row">
+              <div class="filter-block">
+                <label class="filter-label" for="alertsDateRange">Date range</label>
+                <select class="filter-control" id="alertsDateRange">
+                  <option value="24h">Last 24 hours</option>
+                  <option value="3d" selected>Last 3 days</option>
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                </select>
+              </div>
+              <div class="filter-block">
+                <label class="filter-label" for="alertsSource">Source</label>
+                <select class="filter-control" id="alertsSource">
+                  <option value="All" selected>All</option>
+                  <option value="Facebook">Facebook only</option>
+                  <option value="X">X only</option>
+                </select>
+              </div>
+              <div class="filter-block">
+                <div class="filter-label">Priority cluster panel</div>
+                <div class="filter-help">Cards show top keywords, places, and post totals.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel tone-red" style="margin-top:16px;">
+            <div class="panel-header">
+              <div>
+                <div class="surface-title">Priority cluster panel</div>
+                <div class="surface-subtitle">Cluster cards ranked by urgency</div>
+              </div>
+            </div>
+            <div class="alerts-cluster-grid" id="alertClusterGrid"></div>
+          </div>
+
+          <div class="panel tone-gold" style="margin-top:16px;">
+            <div class="panel-header">
+              <div>
+                <div class="surface-title">Priority posts panel</div>
+                <div class="surface-subtitle">Only critical and high priority posts</div>
+              </div>
+            </div>
+            <div class="alerts-post-grid" id="alertPostGrid"></div>
+          </div>
+        </section>
+
+        <section class="page" data-page="watchlist">
+          <div class="page-head">
+            <div>
+              <div class="eyebrow">Saved Intelligence</div>
+              <h2>Critical watchlist and pinned post archive</h2>
+              <p>Pinned posts stay here so your team can check them again later.</p>
+            </div>
+            <div class="page-meta">
+              <div class="page-chip">Sorted by highest priority</div>
+            </div>
+          </div>
+
+          <div class="watchlist-grid" id="watchlistGrid"></div>
+        </section>
+
+        <section class="page" data-page="cluster-detail">
+          <div class="page-head">
+            <div>
+              <div class="eyebrow">Cluster Intelligence</div>
+              <h2 id="clusterPageTitle">Cluster detail</h2>
+              <p id="clusterPageLead">Cluster page with filters, key metrics, and related posts.</p>
+            </div>
+            <div class="page-meta">
+            </div>
+          </div>
+
+          <div class="panel cluster-hero" id="clusterHero"></div>
+
+          <div class="panel">
+            <div class="filters-row">
+              <div class="filter-block">
+                <label class="filter-label" for="clusterSourceFilter">Source</label>
+                <select class="filter-control" id="clusterSourceFilter">
+                  <option value="All" selected>Facebook / X / All</option>
+                  <option value="Facebook">Facebook only</option>
+                  <option value="X">X only</option>
+                </select>
+              </div>
+              <div class="filter-block">
+                <label class="filter-label" for="clusterSeverityFilter">Post mode</label>
+                <select class="filter-control" id="clusterSeverityFilter">
+                  <option value="Trending" selected>Trending</option>
+                  <option value="Critical">Critical</option>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
+              <div class="filter-block">
+                <label class="filter-label" for="clusterDateFilter">Date range</label>
+                <select class="filter-control" id="clusterDateFilter">
+                  <option value="3d">Last 3 days</option>
+                  <option value="7d" selected>Last 7 days</option>
+                  <option value="14d">Last 14 days</option>
+                  <option value="30d">Last 30 days</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="cluster-posts" id="clusterPostGrid"></div>
+        </section>
+
+        <section class="page" data-page="settings">
+          <div class="page-head">
+            <div>
+              <div class="eyebrow">System Preferences</div>
+              <h2>Settings and security controls</h2>
+              <p>Update profile details, theme, alerts, and password.</p>
+            </div>
+            <div class="page-meta">
+              <div class="page-chip">Profile and security</div>
+            </div>
+          </div>
+
+          <div class="settings-grid">
+            <div class="settings-card tone-blue profile-card">
+              <div>
+                <h3>Profile</h3>
+              </div>
+              <div class="profile-grid">
+                <div class="field">
+                  <label for="profileUsername">Username</label>
+                  <input id="profileUsername" type="text" placeholder="Username">
+                </div>
+                <div class="field">
+                  <label for="profileRole">Role name</label>
+                  <input id="profileRole" type="text" placeholder="LGU Analyst">
+                </div>
+                <div class="field">
+                  <label for="profileEmail">Email address</label>
+                  <div class="email-inline">
+                    <input id="profileEmail" type="email" readonly>
+                    <button class="secondary-btn compact-btn" type="button" id="changeEmailBtn">Change email</button>
+                    <div class="email-popover hidden" id="emailPopover">
+                      <div class="field">
+                        <label for="newEmailInput">New email</label>
+                        <input id="newEmailInput" type="email" placeholder="new.email@mana.ph">
+                      </div>
+                      <div class="field">
+                        <label for="emailCodeInput">Enter code</label>
+                        <input id="emailCodeInput" type="text" placeholder="Enter code">
+                      </div>
+                      <div class="email-popover-actions">
+                        <button class="secondary-btn compact-btn" type="button" id="cancelEmailBtn">Cancel</button>
+                        <button class="primary-btn compact-btn" type="button" id="verifyEmailBtn">Verify</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="settings-actions">
+                  <button class="primary-btn" type="button" id="saveProfileBtn">Save profile</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-card tone-green">
+              <div>
+                <h3>Appearance and alerts</h3>
+              </div>
+              <div class="setting-row">
+                <div>
+                  <strong>Dark mode</strong>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="themeCheckbox" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="setting-row">
+                <div>
+                  <strong>Email alerts</strong>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="emailAlertsToggle" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="settings-actions">
+                <button class="secondary-btn" type="button" id="testAlertBtn">Send test alert</button>
+                <span class="page-chip" id="themeModeText">Dark mode active</span>
+              </div>
+            </div>
+
+            <div class="settings-card tone-gold">
+              <div>
+                <h3>Change password</h3>
+              </div>
+              <div class="field">
+                <label for="currentPassword">Current password</label>
+                <div class="input-wrap">
+                  <input id="currentPassword" type="password" placeholder="Current password">
+                  <button class="icon-toggle" type="button" data-toggle-password="currentPassword" aria-label="Show password">
+                    <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="newPassword">New password</label>
+                <div class="input-wrap">
+                  <input id="newPassword" type="password" placeholder="New password">
+                  <button class="icon-toggle" type="button" data-toggle-password="newPassword" aria-label="Show password">
+                    <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="confirmPassword">Confirm new password</label>
+                <div class="input-wrap">
+                  <input id="confirmPassword" type="password" placeholder="Confirm new password">
+                  <button class="icon-toggle" type="button" data-toggle-password="confirmPassword" aria-label="Show password">
+                    <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="settings-actions">
+                <button class="secondary-btn" type="button" id="clearPasswordBtn">Clear</button>
+                <button class="primary-btn" type="button" id="savePasswordBtn">Save password</button>
+              </div>
+            </div>
+
+            <div class="settings-card tone-slate compact-card">
+              <div>
+                <h3>Role status</h3>
+              </div>
+              <div class="setting-row">
+                <div>
+                  <strong>Current role</strong>
+                </div>
+                <span class="page-chip" id="settingsRoleBadge">LGU Analyst</span>
+              </div>
+              <div class="settings-actions">
+                <button class="secondary-btn" type="button" id="logoutBtn">Log out</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/posts.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
