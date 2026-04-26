@@ -100,7 +100,7 @@
               <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.36 6.36L3 16"></path><path d="M3 12A9 9 0 0 1 18.36 5.64L21 8"></path><path d="M3 16v-4h4"></path><path d="M21 8v4h-4"></path></svg>
             </button>
           </div>
-          <div class="captcha-code" id="captchaCode">M4N4X</div>
+          <canvas id="captchaCanvas" width="220" height="58" style="display:block;border-radius:6px;cursor:pointer;width:100%;" title="Click to refresh" onclick="generateCaptcha()"></canvas>
           <div class="field">
             <label for="captchaInput">Verification code</label>
             <input id="captchaInput" type="text" placeholder="Type the CAPTCHA code">
@@ -611,7 +611,9 @@
   </div>
 
   <div class="toast-wrap" id="toastWrap"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="js/config.js"></script>
+  <script src="js/supabase.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/posts.js"></script>

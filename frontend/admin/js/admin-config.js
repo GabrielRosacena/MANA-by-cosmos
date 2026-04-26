@@ -9,6 +9,9 @@
  *   Authorization: Bearer <token>  where the token encodes role = "Admin"
  */
 
+const SUPABASE_URL = "https://gizuoookwwkximbqvcpx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_cj0YjBeAVubMaZVOyYXNyQ_D0en0BF_";
+
 const ADMIN_API_BASE = "http://localhost:5000/api/admin";
 const USE_MOCK = true;
 
@@ -35,7 +38,7 @@ async function adminFetch(endpoint, options = {}) {
 
   if (res.status === 401 || res.status === 403) {
     clearAdminToken();
-    showAdminLogin();
+    window.location.href = "../index.html";
     throw new Error("Session expired or insufficient permissions.");
   }
   if (!res.ok) {

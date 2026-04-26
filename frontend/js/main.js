@@ -53,17 +53,7 @@ async function init() {
   await loadAppData();
   renderClusterNav();
   renderAll();
-  checkRememberedSession();
-
-  // Auto-login via stored JWT (real backend only)
-  if (!USE_MOCK && getToken()) {
-    try {
-      state.profile = await AuthService.getProfile();
-      showApp();
-    } catch {
-      clearToken();
-    }
-  }
+  await checkRememberedSession();
 }
 
 async function loadAppData() {

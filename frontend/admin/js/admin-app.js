@@ -33,20 +33,16 @@ const PAGE_TITLES = {
 // INIT
 // ═══════════════════════════════════════════════════════════════════════════════
 async function adminInit() {
-  // Check for remembered admin session
-  const saved = localStorage.getItem("mana-admin-session");
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      if (parsed.expiresAt > Date.now()) {
-        adminState.admin = parsed.admin;
-        showAdminApp();
-        await loadAllData();
-        return;
-      }
-    } catch {}
+  const { data: { session } } = await supabase.auth.getSession();
+  const sessionRole = session?.user.user_metadata?.role || (session?.user.email === "admin@mana.ph" ? "Admin" : null);
+  if (session && sessionRole === "Admin") {
+    const name = session.user.user_metadata?.name || session.user.email;
+    adminState.admin = { id: session.user.id, name, email: session.user.email, role: "Admin" };
+    showAdminApp();
+    await loadAllData();
+    return;
   }
-  showAdminLogin();
+  window.location.href = "../index.html";
 }
 
 async function loadAllData() {
@@ -63,44 +59,14 @@ async function loadAllData() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUTH
 // ═══════════════════════════════════════════════════════════════════════════════
-function showAdminLogin() {
-  document.getElementById("adminLogin").classList.remove("hidden");
-  document.getElementById("adminApp").classList.add("hidden");
-}
-
 function showAdminApp() {
-  document.getElementById("adminLogin").classList.add("hidden");
   document.getElementById("adminApp").classList.remove("hidden");
 }
 
-document.getElementById("adminLoginForm").addEventListener("submit", async e => {
-  e.preventDefault();
-  const username = document.getElementById("adminUsername").value.trim();
-  const password = document.getElementById("adminPassword").value.trim();
-  const errEl    = document.getElementById("loginError");
-  errEl.textContent = "";
-
-  try {
-    const result = await AdminData.login(username, password);
-    adminState.admin = result.admin;
-    localStorage.setItem("mana-admin-session", JSON.stringify({
-      admin: result.admin,
-      expiresAt: Date.now() + 8 * 60 * 60 * 1000, // 8 hours
-    }));
-    showAdminApp();
-    await loadAllData();
-    adminToast("Welcome back", `Signed in as ${adminState.admin.name}`);
-  } catch (err) {
-    errEl.textContent = err.message || "Invalid credentials.";
-  }
-});
-
-document.getElementById("adminLogoutBtn").addEventListener("click", () => {
-  localStorage.removeItem("mana-admin-session");
+document.getElementById("adminLogoutBtn").addEventListener("click", async () => {
+  await supabase.auth.signOut();
   clearAdminToken();
-  showAdminLogin();
-  document.getElementById("adminUsername").value = "";
-  document.getElementById("adminPassword").value = "";
+  window.location.href = "../index.html";
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -398,12 +364,22 @@ document.getElementById("userForm").addEventListener("submit", async e => {
     role:     document.getElementById("userRole").value,
     password: document.getElementById("userPassword").value.trim(),
   };
+  if (!adminState.editingUserId) {
+    if (!data.name)  { adminToast("Validation Error", "Name is required."); return; }
+    if (!data.email) { adminToast("Validation Error", "Email is required."); return; }
+    if (!data.password || data.password.length < 6) {
+      adminToast("Validation Error", "Password must be at least 6 characters.");
+      return;
+    }
+  }
   try {
     if (adminState.editingUserId) {
       await AdminData.updateUser(adminState.editingUserId, data);
+      AdminData.insertLog("User updated", `${data.name} — role: ${data.role}`, "admin");
       adminToast("User updated", `${data.name}'s profile has been updated.`);
     } else {
       await AdminData.createUser(data);
+      AdminData.insertLog("User created", `${data.name} (${data.email}) — ${data.role}`, "admin");
       adminToast("User created", `${data.name} has been added to the system.`);
     }
     closeModal("userModal");
@@ -444,6 +420,7 @@ async function toggleUserStatus(userId, currentStatus) {
   adminState.confirmCallback = async () => {
     try {
       await AdminData.setUserStatus(userId, newStatus);
+      AdminData.insertLog(newStatus === "Suspended" ? "User suspended" : "User reactivated", user.name, "admin");
       adminToast("Status updated", `${user.name} has been ${newStatus === "Suspended" ? "suspended" : "reactivated"}.`);
       adminState.users = await AdminData.getUsers(adminState.userFilters);
       renderUsersTable();
@@ -461,6 +438,7 @@ function confirmDeleteUser(userId, userName) {
   adminState.confirmCallback = async () => {
     try {
       await AdminData.deleteUser(userId);
+      AdminData.insertLog("User deleted", userName, "admin");
       adminToast("User deleted", `${userName} has been removed from the system.`);
       adminState.users = await AdminData.getUsers(adminState.userFilters);
       renderUsersTable();
@@ -543,7 +521,6 @@ function renderSettings() {
   document.getElementById("settingCriticalAlerts").checked = s.notifications.criticalAlerts;
   document.getElementById("settingDailyDigest").checked    = s.notifications.dailyDigest;
   document.getElementById("settingAlertEmail").value        = s.notifications.alertEmail;
-  document.getElementById("settingSlackWebhook").value      = s.notifications.slackWebhook;
 
   // System
   document.getElementById("settingScrapeInterval").value   = s.system.scrapeInterval;
@@ -590,7 +567,6 @@ document.getElementById("saveNotifBtn").addEventListener("click", () =>
     criticalAlerts: document.getElementById("settingCriticalAlerts").checked,
     dailyDigest:    document.getElementById("settingDailyDigest").checked,
     alertEmail:     document.getElementById("settingAlertEmail").value,
-    slackWebhook:   document.getElementById("settingSlackWebhook").value,
   }))
 );
 

@@ -44,20 +44,18 @@ async function apiVerifyEmailChange(newEmail, code) {
 
 // ─── DataService shim (used by main.js) ──────────────────────────────────────
 const AuthService = {
-  async login(username, password, remember) {
-    if (USE_MOCK) {
-      if (!username || !password) throw new Error("Username and password required.");
-      if (username === "admin" && password === "admin2026") {
-        return { user: { username, role: "Admin", email: "ana.reyes@mana.ph" } };
-      }
-      return { user: { username, role: "LGU Analyst", email: `${username}@mana.ph` } };
-    }
-    return apiLogin(username, password, remember);
+  async login(email, password, remember) {
+    if (!email || !password) throw new Error("Email and password required.");
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+    const role = data.user.user_metadata?.role || (data.user.email === "admin@mana.ph" ? "Admin" : "LGU Analyst");
+    const name = data.user.user_metadata?.name || data.user.email;
+    return { _uid: data.user.id, user: { username: name, role, email: data.user.email } };
   },
 
   async logout() {
-    if (USE_MOCK) { clearToken(); return; }
-    return apiLogout();
+    await supabase.auth.signOut();
+    clearToken();
   },
 
   async getProfile() {
@@ -112,6 +110,14 @@ async function handleLogin(event) {
     const result = await AuthService.login(identity, password, remember);
     state.profile = result.user || state.profile;
 
+    supabase.from("activity_logs").insert({
+      user_id:   result._uid,
+      user_name: state.profile.username,
+      action:    "Logged in",
+      detail:    state.profile.role === "Admin" ? "Via admin panel" : "Via main dashboard",
+      type:      "auth",
+    }).then(() => {}).catch(() => {});
+
     if (state.profile.role === "Admin") {
       window.location.href = "admin/index.html";
       return;
@@ -128,6 +134,7 @@ async function handleLogin(event) {
     showToast("Authenticated", "MANA is now ready for dashboard monitoring.");
   } catch (err) {
     showToast("Sign-in failed", err.message || "Invalid credentials. Please try again.");
+    console.error("Login error:", err);
     generateCaptcha();
   }
 }
@@ -140,18 +147,21 @@ async function doLogout() {
   showToast("Logged out", "You have been signed out of MANA.");
 }
 
-function checkRememberedSession() {
-  if (!USE_MOCK) return; // real backend handles session via token
-  const stored = localStorage.getItem("mana-session");
-  if (!stored) return;
-  try {
-    const parsed = JSON.parse(stored);
-    if (!parsed.expiresAt || parsed.expiresAt <= Date.now()) {
-      localStorage.removeItem("mana-session");
-    }
-  } catch {
-    localStorage.removeItem("mana-session");
+async function checkRememberedSession() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+  const role = session.user.user_metadata?.role || (session.user.email === "admin@mana.ph" ? "Admin" : "LGU Analyst");
+  if (role === "Admin") {
+    window.location.href = "admin/index.html";
+    return;
   }
+  state.profile = {
+    username: session.user.user_metadata?.name || session.user.email,
+    role,
+    email: session.user.email,
+  };
+  renderProfileSettings();
+  showApp();
 }
 
 // ─── Profile & Password UI ────────────────────────────────────────────────────
@@ -218,7 +228,58 @@ function generateCaptcha() {
   let code = "";
   for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
   state.currentCaptcha = code;
-  document.getElementById("captchaCode").textContent = code;
+  drawCaptcha(code);
+}
+
+function drawCaptcha(code) {
+  const canvas = document.getElementById("captchaCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+
+  // Background
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, "#0d1526");
+  bg.addColorStop(1, "#121d33");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Noise dots
+  for (let i = 0; i < 140; i++) {
+    ctx.fillStyle = `rgba(148,163,184,${0.1 + Math.random() * 0.25})`;
+    ctx.fillRect(Math.random() * W, Math.random() * H, Math.random() * 2.5, Math.random() * 2.5);
+  }
+
+  // Interference bezier curves
+  const curveColors = [
+    "rgba(56,189,248,0.15)", "rgba(129,140,248,0.13)",
+    "rgba(52,211,153,0.12)", "rgba(251,191,36,0.10)"
+  ];
+  for (let i = 0; i < 4; i++) {
+    ctx.strokeStyle = curveColors[i];
+    ctx.lineWidth = 1 + Math.random();
+    ctx.beginPath();
+    ctx.moveTo(0, Math.random() * H);
+    ctx.bezierCurveTo(W * 0.25, Math.random() * H, W * 0.75, Math.random() * H, W, Math.random() * H);
+    ctx.stroke();
+  }
+
+  // Letters — each randomly rotated, offset, and colored
+  const palette = ["#38bdf8", "#a78bfa", "#34d399", "#fb923c", "#f472b6", "#fbbf24"];
+  const slotW = W / code.length;
+  for (let i = 0; i < code.length; i++) {
+    ctx.save();
+    ctx.translate(slotW * i + slotW / 2, H / 2 + (Math.random() * 10 - 5));
+    ctx.rotate((Math.random() - 0.5) * 0.6);
+    ctx.font = `bold ${20 + Math.random() * 7}px 'Courier New', monospace`;
+    ctx.fillStyle = palette[Math.floor(Math.random() * palette.length)];
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = 5;
+    ctx.fillText(code[i], 0, 0);
+    ctx.restore();
+  }
 }
 
 // ─── Misc UI ──────────────────────────────────────────────────────────────────

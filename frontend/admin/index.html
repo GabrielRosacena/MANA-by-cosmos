@@ -9,38 +9,6 @@
 <body>
 
 <!-- ══════════════════════════════════════════════════════════════
-     LOGIN
-══════════════════════════════════════════════════════════════ -->
-<div id="adminLogin">
-  <div class="login-card">
-    <div class="login-brand">
-      <div class="login-badge">M</div>
-      <div class="login-brand-text">
-        <h1>MANA</h1>
-        <p>Admin Control Panel</p>
-      </div>
-    </div>
-    <h2>Administrator Sign In</h2>
-    <p>Restricted access. Only authorised system administrators may proceed.</p>
-
-    <form id="adminLoginForm">
-      <div class="login-field">
-        <label for="adminUsername">Username</label>
-        <input id="adminUsername" type="text" placeholder="admin" autocomplete="username" value="admin">
-      </div>
-      <div class="login-field">
-        <label for="adminPassword">Password</label>
-        <input id="adminPassword" type="password" placeholder="••••••••" autocomplete="current-password" value="admin2026">
-      </div>
-      <div id="loginError" class="login-error"></div>
-      <button class="login-btn" type="submit">Sign in to Admin Panel</button>
-    </form>
-
-    <div class="login-footer">Demo credentials: admin / admin2026 — Protected system for authorised LGU personnel only.</div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════════════════════
      APP SHELL
 ══════════════════════════════════════════════════════════════ -->
 <div id="adminApp" class="hidden">
@@ -113,10 +81,6 @@
       </div>
       <div class="topbar-actions">
         <span class="topbar-chip">System Online</span>
-        <a href="../index.html" class="btn btn-ghost btn-sm">
-          <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-          Main App
-        </a>
       </div>
     </header>
 
@@ -483,11 +447,6 @@
                 <label>Alert Email Address</label>
                 <input type="email" id="settingAlertEmail" placeholder="admin@mana.ph">
               </div>
-              <div class="form-field">
-                <label>Slack Webhook URL (optional)</label>
-                <input type="url" id="settingSlackWebhook" placeholder="https://hooks.slack.com/services/…">
-                <span class="form-help">Leave blank to disable Slack notifications.</span>
-              </div>
             </div>
             <div class="card-footer">
               <button class="btn btn-ghost" onclick="loadSettings()">Reset</button>
@@ -582,7 +541,7 @@
         </div>
         <div class="form-field" id="userPasswordRow">
           <label for="userPassword">Initial Password</label>
-          <input type="password" id="userPassword" placeholder="Minimum 8 characters">
+          <input type="password" id="userPassword" placeholder="Minimum 6 characters" minlength="6">
           <span class="form-help">The user should change this on first login.</span>
         </div>
       </form>
@@ -643,7 +602,9 @@
 <div id="adminToastWrap"></div>
 
 <!-- Scripts (load order matters) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/admin-config.js"></script>
+<script src="js/supabase.js"></script>
 <script src="js/admin-data.js"></script>
 <script src="js/admin-app.js"></script>
 </body>
