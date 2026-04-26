@@ -47,6 +47,9 @@ const AuthService = {
   async login(username, password, remember) {
     if (USE_MOCK) {
       if (!username || !password) throw new Error("Username and password required.");
+      if (username === "admin" && password === "admin2026") {
+        return { user: { username, role: "Admin", email: "ana.reyes@mana.ph" } };
+      }
       return { user: { username, role: "LGU Analyst", email: `${username}@mana.ph` } };
     }
     return apiLogin(username, password, remember);
@@ -108,6 +111,11 @@ async function handleLogin(event) {
   try {
     const result = await AuthService.login(identity, password, remember);
     state.profile = result.user || state.profile;
+
+    if (state.profile.role === "Admin") {
+      window.location.href = "admin/index.html";
+      return;
+    }
 
     if (remember) {
       localStorage.setItem("mana-session", JSON.stringify({ expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 }));

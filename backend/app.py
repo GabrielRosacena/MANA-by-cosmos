@@ -13,6 +13,7 @@ from flask_jwt_extended import JWTManager
 from routes.auth  import auth_bp
 from routes.posts import posts_bp
 from routes.stats import stats_bp
+from routes.admin import admin_bp
 
 app = Flask(__name__)
 
@@ -29,6 +30,7 @@ JWTManager(app)
 app.register_blueprint(auth_bp,  url_prefix="/api/auth")
 app.register_blueprint(posts_bp, url_prefix="/api")
 app.register_blueprint(stats_bp, url_prefix="/api")
+app.register_blueprint(admin_bp, url_prefix="/api/admin")
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

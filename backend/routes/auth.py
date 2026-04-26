@@ -19,7 +19,8 @@ auth_bp = Blueprint("auth", __name__)
 
 # Placeholder user store — replace with your DB model
 USERS = {
-    "admin_mana": {"password": "mana2026!", "role": "LGU Analyst", "email": "lgu.analyst@mana.ph"}
+    "admin_mana": {"password": "mana2026!", "role": "LGU Analyst", "email": "lgu.analyst@mana.ph"},
+    "admin":      {"password": "admin2026", "role": "Admin",        "email": "ana.reyes@mana.ph"},
 }
 
 

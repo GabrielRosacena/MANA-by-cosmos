@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MANA Admin Panel</title>
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     LOGIN
+══════════════════════════════════════════════════════════════ -->
+<div id="adminLogin">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="login-badge">M</div>
+      <div class="login-brand-text">
+        <h1>MANA</h1>
+        <p>Admin Control Panel</p>
+      </div>
+    </div>
+    <h2>Administrator Sign In</h2>
+    <p>Restricted access. Only authorised system administrators may proceed.</p>
+
+    <form id="adminLoginForm">
+      <div class="login-field">
+        <label for="adminUsername">Username</label>
+        <input id="adminUsername" type="text" placeholder="admin" autocomplete="username" value="admin">
+      </div>
+      <div class="login-field">
+        <label for="adminPassword">Password</label>
+        <input id="adminPassword" type="password" placeholder="••••••••" autocomplete="current-password" value="admin2026">
+      </div>
+      <div id="loginError" class="login-error"></div>
+      <button class="login-btn" type="submit">Sign in to Admin Panel</button>
+    </form>
+
+    <div class="login-footer">Demo credentials: admin / admin2026 — Protected system for authorised LGU personnel only.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     APP SHELL
+══════════════════════════════════════════════════════════════ -->
+<div id="adminApp" class="hidden">
+
+  <!-- SIDEBAR -->
+  <aside class="admin-sidebar">
+    <div class="sidebar-head">
+      <div class="sidebar-brand">
+        <div class="sidebar-badge">M</div>
+        <div class="sidebar-brand-text">
+          <h2>MANA</h2>
+          <span>Admin Panel</span>
+        </div>
+      </div>
+      <button class="sidebar-collapse-btn" id="sidebarCollapseBtn" title="Collapse sidebar">
+        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"></path></svg>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Overview</div>
+      <button class="admin-nav-btn active" data-admin-nav="dashboard">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+        Dashboard
+      </button>
+
+      <div class="nav-section-label">Administration</div>
+      <button class="admin-nav-btn" data-admin-nav="users">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        User Management
+        <span class="nav-badge" id="suspendedBadge" style="display:none;"></span>
+      </button>
+      <button class="admin-nav-btn" data-admin-nav="logs">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        Activity Logs
+      </button>
+
+      <div class="nav-section-label">Configuration</div>
+      <button class="admin-nav-btn" data-admin-nav="settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        Settings
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <div class="user-avatar" id="sidebarUserAvatar">AR</div>
+        <div class="user-info">
+          <strong id="sidebarUserName">Ana Reyes</strong>
+          <span id="sidebarUserRole">Admin</span>
+        </div>
+        <button class="logout-btn" id="adminLogoutBtn" title="Sign out">
+          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="admin-main">
+
+    <!-- TOPBAR -->
+    <header class="admin-topbar">
+      <button class="topbar-toggle" id="topbarToggleBtn">
+        <svg viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+      <div class="topbar-title">
+        <div class="eyebrow" id="topbarEyebrow">Overview</div>
+        <h1 id="topbarPageTitle">Dashboard Monitoring</h1>
+      </div>
+      <div class="topbar-actions">
+        <span class="topbar-chip">System Online</span>
+        <a href="../index.html" class="btn btn-ghost btn-sm">
+          <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+          Main App
+        </a>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <div class="admin-content">
+
+      <!-- ════════════════════════════════════════════════════
+           PAGE: DASHBOARD
+      ════════════════════════════════════════════════════ -->
+      <section class="admin-page active" data-page="dashboard">
+        <div class="page-header">
+          <div class="page-header-row">
+            <div>
+              <div class="eyebrow">Overview</div>
+              <h2>Dashboard Monitoring</h2>
+              <p>Real-time post volume, priority distribution, sentiment trends, and keyword signals.</p>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <select id="statsRangeSelect" class="filter-select">
+                <option value="7d">Last 7 days</option>
+                <option value="14d">Last 14 days</option>
+                <option value="30d">Last 30 days</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Post Volume KPIs -->
+        <div class="grid-3 section-gap" style="gap:14px;margin-bottom:20px;">
+          <div class="stat-card">
+            <div class="stat-card-top">
+              <div class="stat-icon blue"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>
+              <span class="stat-delta up">↑ Posts</span>
+            </div>
+            <div class="stat-value" id="kpiTotalPosts">—</div>
+            <div class="stat-label">Total Posts Analyzed</div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width:100%;background:var(--accent);"></div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-top">
+              <div class="stat-icon blue"><svg viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg></div>
+              <span class="stat-delta neutral">FB</span>
+            </div>
+            <div class="stat-value" id="kpiFbPosts">—</div>
+            <div class="stat-label">Facebook Posts</div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width:60%;background:#1877f2;"></div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-top">
+              <div class="stat-icon cyan"><svg viewBox="0 0 24 24"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path></svg></div>
+              <span class="stat-delta neutral">X</span>
+            </div>
+            <div class="stat-value" id="kpiXPosts">—</div>
+            <div class="stat-label">X / Twitter Posts</div>
+            <div class="stat-bar"><div class="stat-bar-fill" style="width:40%;background:var(--cyan);"></div></div>
+          </div>
+        </div>
+
+        <!-- Priority KPIs -->
+        <div class="grid-4" style="margin-bottom:20px;">
+          <div class="stat-card">
+            <div class="stat-card-top"><div class="stat-icon red"><svg viewBox="0 0 24 24"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg></div><span class="stat-delta down">Critical</span></div>
+            <div class="stat-value" id="kpiCritical">—</div>
+            <div class="stat-label">Critical Priority</div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="kpiCriticalBar" style="background:var(--red);"></div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-top"><div class="stat-icon amber"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div><span class="stat-delta down">High</span></div>
+            <div class="stat-value" id="kpiHigh">—</div>
+            <div class="stat-label">High Priority</div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="kpiHighBar" style="background:var(--amber);"></div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-top"><div class="stat-icon cyan"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg></div><span class="stat-delta neutral">Med</span></div>
+            <div class="stat-value" id="kpiModerate">—</div>
+            <div class="stat-label">Moderate Priority</div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="kpiModerateBar" style="background:var(--cyan);"></div></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-top"><div class="stat-icon green"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg></div><span class="stat-delta up">Low</span></div>
+            <div class="stat-value" id="kpiLow">—</div>
+            <div class="stat-label">Low Priority</div>
+            <div class="stat-bar"><div class="stat-bar-fill" id="kpiLowBar" style="background:var(--green);"></div></div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid-2" style="margin-bottom:20px;">
+
+          <!-- Sentiment Donut -->
+          <div class="admin-card">
+            <div class="card-header">
+              <div><h3>Sentiment Distribution</h3><p>Overall tone breakdown across all fetched posts</p></div>
+            </div>
+            <div class="card-body">
+              <div class="donut-wrap">
+                <div id="sentimentDonut"></div>
+                <div class="donut-legend" id="sentimentLegend"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Post Volume Spark -->
+          <div class="admin-card">
+            <div class="card-header">
+              <div><h3>Post Volume Trend</h3><p>Combined Facebook + X posts over the selected period</p></div>
+            </div>
+            <div class="card-body">
+              <div id="postVolumeSpark" style="height:48px;width:100%;margin-bottom:12px;"></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <span class="badge badge-blue">Facebook + X combined</span>
+                <span class="badge badge-slate">Select range above to update</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Priority Trend + Keywords -->
+        <div class="grid-2">
+          <div class="admin-card">
+            <div class="card-header">
+              <div><h3>Priority Trend</h3><p>Critical and High posts tracked over the period</p></div>
+              <div style="display:flex;gap:12px;font-size:0.76rem;font-weight:700;color:var(--text-soft);">
+                <span><span style="color:var(--red);">■</span> Critical</span>
+                <span><span style="color:var(--amber);">■</span> High</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <div id="priorityTrendChart" style="height:130px;width:100%;"></div>
+            </div>
+          </div>
+
+          <div class="admin-card">
+            <div class="card-header"><div><h3>Top Keywords</h3><p>Most frequent disaster-related terms detected</p></div></div>
+            <div class="card-body">
+              <div class="keyword-list" id="keywordBars"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════
+           PAGE: USER MANAGEMENT
+      ════════════════════════════════════════════════════ -->
+      <section class="admin-page" data-page="users">
+        <div class="page-header">
+          <div class="page-header-row">
+            <div>
+              <div class="eyebrow">Administration</div>
+              <h2>User Management</h2>
+              <p>Create, edit, suspend, and manage all system accounts and their roles.</p>
+            </div>
+            <button class="btn btn-primary" id="createUserBtn">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Add User
+            </button>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <div class="card-header">
+            <div><h3>All Users</h3><p id="userCount">— users</p></div>
+            <div class="filter-bar" style="margin-bottom:0;">
+              <div class="search-wrap">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" class="search-input" id="userSearchInput" placeholder="Search name or email…">
+              </div>
+              <select class="filter-select" id="userRoleFilter">
+                <option value="all">All roles</option>
+                <option value="Admin">Admin</option>
+                <option value="LGU Analyst">LGU Analyst</option>
+                <option value="Viewer">Viewer</option>
+              </select>
+              <select class="filter-select" id="userStatusFilter">
+                <option value="all">All statuses</option>
+                <option value="Active">Active</option>
+                <option value="Suspended">Suspended</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Last Login</th>
+                  <th>Logins</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="userTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="pagination">
+            <div class="pagination-info" id="paginationInfo"></div>
+            <div class="pagination-btns" id="paginationBtns"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════
+           PAGE: ACTIVITY LOGS
+      ════════════════════════════════════════════════════ -->
+      <section class="admin-page" data-page="logs">
+        <div class="page-header">
+          <div class="page-header-row">
+            <div>
+              <div class="eyebrow">Audit</div>
+              <h2>Activity Logs</h2>
+              <p>Full audit trail of user logins, edits, admin actions, and system events.</p>
+            </div>
+            <select class="filter-select" id="logTypeFilter">
+              <option value="all">All types</option>
+              <option value="auth">Authentication</option>
+              <option value="edit">Data edits</option>
+              <option value="admin">Admin actions</option>
+              <option value="system">System events</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <div class="card-header"><div><h3>Event Log</h3><p>Chronological audit trail</p></div></div>
+          <div class="card-body">
+            <div class="activity-list" id="activityLogList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════
+           PAGE: SETTINGS
+      ════════════════════════════════════════════════════ -->
+      <section class="admin-page" data-page="settings">
+        <div class="page-header">
+          <div class="eyebrow">Configuration</div>
+          <h2>System Settings</h2>
+          <p>Configure general, security, notification, and system-level parameters.</p>
+        </div>
+
+        <div class="section-gap">
+
+          <!-- General -->
+          <div class="admin-card">
+            <div class="card-header"><div><h3>General Settings</h3><p>System name, timezone, and display defaults</p></div></div>
+            <div class="card-body form-grid">
+              <div class="form-field">
+                <label>System Name</label>
+                <input type="text" id="settingSystemName">
+              </div>
+              <div class="form-field">
+                <label>System Description</label>
+                <textarea id="settingSystemDesc" rows="2"></textarea>
+              </div>
+              <div class="form-row-2">
+                <div class="form-field">
+                  <label>Timezone</label>
+                  <select id="settingTimezone">
+                    <option value="Asia/Manila">Asia/Manila (PHT, UTC+8)</option>
+                    <option value="UTC">UTC</option>
+                    <option value="Asia/Singapore">Asia/Singapore</option>
+                  </select>
+                </div>
+                <div class="form-field">
+                  <label>Date Format</label>
+                  <select id="settingDateFormat">
+                    <option value="MMM D, YYYY">MMM D, YYYY</option>
+                    <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                    <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-field">
+                <label>Default Dashboard Range</label>
+                <select id="settingDefaultRange">
+                  <option value="24h">Last 24 hours</option>
+                  <option value="7d">Last 7 days</option>
+                  <option value="14d">Last 14 days</option>
+                  <option value="30d">Last 30 days</option>
+                </select>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-info">
+                  <strong>Maintenance Mode</strong>
+                  <span>Locks the main app for users while admin work is in progress.</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="settingMaintenance">
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+            </div>
+            <div class="card-footer">
+              <button class="btn btn-ghost" onclick="loadSettings()">Reset</button>
+              <button class="btn btn-primary" id="saveGeneralBtn">Save General Settings</button>
+            </div>
+          </div>
+
+          <!-- Security -->
+          <div class="admin-card">
+            <div class="card-header"><div><h3>Security Settings</h3><p>Session, authentication, and access control</p></div></div>
+            <div class="card-body form-grid">
+              <div class="form-row-2">
+                <div class="form-field">
+                  <label>Session Timeout (minutes)</label>
+                  <input type="number" id="settingSessionTimeout" min="5" max="480">
+                  <span class="form-help">Users are signed out after this many idle minutes.</span>
+                </div>
+                <div class="form-field">
+                  <label>Max Login Attempts</label>
+                  <input type="number" id="settingMaxAttempts" min="1" max="20">
+                  <span class="form-help">Account is locked after this many failed attempts.</span>
+                </div>
+              </div>
+              <div class="form-row-2">
+                <div class="form-field">
+                  <label>Minimum Password Length</label>
+                  <input type="number" id="settingMinPassword" min="6" max="32">
+                </div>
+                <div class="form-field">
+                  <label>Log Retention (days)</label>
+                  <input type="number" id="settingLogRetention" min="7" max="365">
+                </div>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-info">
+                  <strong>Require Two-Factor Authentication</strong>
+                  <span>All users must use 2FA to access the system.</span>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="settingRequire2FA">
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+            </div>
+            <div class="card-footer">
+              <button class="btn btn-ghost" onclick="loadSettings()">Reset</button>
+              <button class="btn btn-primary" id="saveSecurityBtn">Save Security Settings</button>
+            </div>
+          </div>
+
+          <!-- Notifications -->
+          <div class="admin-card">
+            <div class="card-header"><div><h3>Notification Preferences</h3><p>Email alerts, digest, and webhook integration</p></div></div>
+            <div class="card-body form-grid">
+              <div class="toggle-row">
+                <div class="toggle-info"><strong>Email Alerts</strong><span>Send email notifications for system events and updates.</span></div>
+                <label class="toggle-switch"><input type="checkbox" id="settingEmailAlerts"><span class="toggle-track"></span></label>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-info"><strong>Critical Priority Alerts</strong><span>Immediately notify admins when a Critical post is detected.</span></div>
+                <label class="toggle-switch"><input type="checkbox" id="settingCriticalAlerts"><span class="toggle-track"></span></label>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-info"><strong>Daily Digest</strong><span>Send a daily summary email with key metrics and activity.</span></div>
+                <label class="toggle-switch"><input type="checkbox" id="settingDailyDigest"><span class="toggle-track"></span></label>
+              </div>
+              <div class="form-field">
+                <label>Alert Email Address</label>
+                <input type="email" id="settingAlertEmail" placeholder="admin@mana.ph">
+              </div>
+              <div class="form-field">
+                <label>Slack Webhook URL (optional)</label>
+                <input type="url" id="settingSlackWebhook" placeholder="https://hooks.slack.com/services/…">
+                <span class="form-help">Leave blank to disable Slack notifications.</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <button class="btn btn-ghost" onclick="loadSettings()">Reset</button>
+              <button class="btn btn-primary" id="saveNotifBtn">Save Notification Settings</button>
+            </div>
+          </div>
+
+          <!-- System Configuration -->
+          <div class="admin-card">
+            <div class="card-header"><div><h3>System Configuration</h3><p>Scraping schedule, data limits, and operational modes</p></div></div>
+            <div class="card-body form-grid">
+              <div class="form-row-2">
+                <div class="form-field">
+                  <label>Scrape Interval (minutes)</label>
+                  <input type="number" id="settingScrapeInterval" min="5" max="1440">
+                  <span class="form-help">How often Apify scrapes Facebook and X for new posts.</span>
+                </div>
+                <div class="form-field">
+                  <label>Max Posts Per Run</label>
+                  <input type="number" id="settingMaxPosts" min="50" max="5000">
+                  <span class="form-help">Cap on posts fetched per scraping cycle.</span>
+                </div>
+              </div>
+              <div class="form-field">
+                <label>Backup Frequency</label>
+                <select id="settingBackupFreq">
+                  <option value="hourly">Hourly</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="manual">Manual only</option>
+                </select>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-info"><strong>Retry on Failure</strong><span>Automatically retry failed scraping runs up to 3 times.</span></div>
+                <label class="toggle-switch"><input type="checkbox" id="settingRetryOnFail"><span class="toggle-track"></span></label>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-info"><strong>Automatic Backups</strong><span>Scheduled database backups at the selected frequency.</span></div>
+                <label class="toggle-switch"><input type="checkbox" id="settingBackupEnabled"><span class="toggle-track"></span></label>
+              </div>
+              <div class="toggle-row">
+                <div class="toggle-info"><strong>Debug Mode</strong><span>Log verbose pipeline output to the server console. Disable in production.</span></div>
+                <label class="toggle-switch"><input type="checkbox" id="settingDebugMode"><span class="toggle-track"></span></label>
+              </div>
+            </div>
+            <div class="card-footer">
+              <button class="btn btn-ghost" onclick="loadSettings()">Reset</button>
+              <button class="btn btn-primary" id="saveSystemBtn">Save System Settings</button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </div><!-- /.admin-content -->
+  </div><!-- /.admin-main -->
+</div><!-- /#adminApp -->
+
+<!-- ══════════════════════════════════════════════════════════════
+     MODALS
+══════════════════════════════════════════════════════════════ -->
+
+<!-- Create / Edit User -->
+<div class="modal-backdrop" id="userModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="userModalTitle">Create User</h3>
+      <button class="modal-close" data-close-modal="userModal">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="userForm" class="form-grid">
+        <div class="form-row-2">
+          <div class="form-field">
+            <label for="userName">Full Name</label>
+            <input type="text" id="userName" placeholder="Ana Reyes" required>
+          </div>
+          <div class="form-field">
+            <label for="userEmail">Email Address</label>
+            <input type="email" id="userEmail" placeholder="user@mana.ph" required>
+          </div>
+        </div>
+        <div class="form-field">
+          <label for="userRole">Role</label>
+          <select id="userRole">
+            <option value="Viewer">Viewer</option>
+            <option value="LGU Analyst">LGU Analyst</option>
+            <option value="Admin">Admin</option>
+          </select>
+          <span class="form-help">Viewer: read-only · LGU Analyst: full dashboard · Admin: system control</span>
+        </div>
+        <div class="form-field" id="userPasswordRow">
+          <label for="userPassword">Initial Password</label>
+          <input type="password" id="userPassword" placeholder="Minimum 8 characters">
+          <span class="form-help">The user should change this on first login.</span>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal="userModal">Cancel</button>
+      <button class="btn btn-primary" onclick="document.getElementById('userForm').requestSubmit()">Save User</button>
+    </div>
+  </div>
+</div>
+
+<!-- Reset Password -->
+<div class="modal-backdrop" id="resetPasswordModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Reset Password</h3>
+      <button class="modal-close" data-close-modal="resetPasswordModal">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="resetPasswordForm" class="form-grid">
+        <div class="form-field">
+          <label for="newPasswordInput">New Password</label>
+          <input type="password" id="newPasswordInput" placeholder="Minimum 8 characters" required>
+        </div>
+        <div class="form-field">
+          <label for="confirmPasswordInput">Confirm Password</label>
+          <input type="password" id="confirmPasswordInput" placeholder="Repeat new password" required>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal="resetPasswordModal">Cancel</button>
+      <button class="btn btn-primary" onclick="document.getElementById('resetPasswordForm').requestSubmit()">Reset Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Action -->
+<div class="modal-backdrop" id="confirmModal">
+  <div class="modal">
+    <div class="modal-body" style="text-align:center;padding:28px 24px;">
+      <div class="confirm-icon danger" style="margin:0 auto 14px;">
+        <svg viewBox="0 0 24 24"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+      </div>
+      <div class="confirm-title">Confirm Action</div>
+      <p class="confirm-text" id="confirmText">Are you sure you want to proceed?</p>
+    </div>
+    <div class="modal-footer" style="justify-content:center;gap:12px;">
+      <button class="btn btn-ghost" data-close-modal="confirmModal">Cancel</button>
+      <button class="btn btn-danger" id="confirmActionBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="adminToastWrap"></div>
+
+<!-- Scripts (load order matters) -->
+<script src="js/admin-config.js"></script>
+<script src="js/admin-data.js"></script>
+<script src="js/admin-app.js"></script>
+</body>
+</html>
