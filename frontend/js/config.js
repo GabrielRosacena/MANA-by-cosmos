@@ -13,7 +13,7 @@ const SUPABASE_URL = "https://gizuoookwwkximbqvcpx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_cj0YjBeAVubMaZVOyYXNyQ_D0en0BF_";
 
 const API_BASE = "http://localhost:5000/api";
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 // ─── JWT Helpers ──────────────────────────────────────────────────────────────
 function getToken()        { return localStorage.getItem("mana-token"); }
