@@ -96,6 +96,16 @@ select {
   transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
 }
 
+select {
+  color: #111827;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+select option {
+  color: #111827;
+  background: #ffffff;
+}
+
 input:focus,
 select:focus {
   border-color: rgba(88, 166, 255, 0.72);
@@ -1004,14 +1014,16 @@ body.light-theme .status-strip small {
 }
 
 .kpi-grid {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .mini-card {
-  padding: 10px;
-  border-radius: 14px;
+  padding: 14px;
+  border-radius: 16px;
   border: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 42%);
   box-shadow: var(--shadow-soft);
   transition: transform var(--transition), border-color var(--transition);
 }
@@ -1036,7 +1048,7 @@ body.light-theme .status-strip small {
 .mini-card-value {
   margin-top: 10px;
   font-family: var(--font-display);
-  font-size: 1.45rem;
+  font-size: clamp(1.45rem, 2.2vw, 1.85rem);
   letter-spacing: -0.05em;
 }
 
@@ -1378,7 +1390,9 @@ body.light-theme .status-strip small {
   min-height: 38px;
   border-radius: 10px;
   padding: 0 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.96);
+  color: #111827;
+  font-weight: 700;
 }
 
 .status-select.status-resolved {
@@ -1461,7 +1475,9 @@ body.light-theme .status-strip small {
   min-height: 40px;
   border-radius: 12px;
   padding: 0 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.96);
+  color: #111827;
+  font-weight: 700;
 }
 
 .sentiment-badge.sentiment-negative {

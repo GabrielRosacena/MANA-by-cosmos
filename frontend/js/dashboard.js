@@ -23,50 +23,121 @@ const MOCK_CLUSTERS = [
 
 const MOCK_DASHBOARD_SUMMARY = {
   "24h": [
-    { label:"Critical Posts %",      value:"21%",    meta:"Today",         bar:21  },
-    { label:"High Priority %",        value:"37%",    meta:"Today",         bar:37  },
-    { label:"Total Posts Analyzed",   value:"2,148",  meta:"Today",         bar:32  },
-    { label:"Total Facebook Posts",   value:"1,245",  meta:"Today",         bar:25  },
-    { label:"Total X/Twitter Posts",  value:"903",    meta:"Today",         bar:18  },
-    { label:"Active Clusters %",      value:"100%",   meta:"All active",    bar:100 },
+    { label:"High Priority Count",   value:"794",    meta:"Last 24 hours",  bar:37  },
+    { label:"Total Posts Analyzed",  value:"2,148",  meta:"Last 24 hours",  bar:100 },
+    { label:"Total Facebook Posts",  value:"1,245",  meta:"Last 24 hours",  bar:58  },
+    { label:"Total X/Twitter Posts", value:"903",    meta:"Last 24 hours",  bar:42  },
+    { label:"Active Clusters",       value:"8",      meta:"8 of 8 clusters",bar:100 },
   ],
   "7d": [
-    { label:"Critical Posts %",      value:"18%",    meta:"Last 7 days",   bar:18  },
-    { label:"High Priority %",        value:"34%",    meta:"Last 7 days",   bar:34  },
-    { label:"Total Posts Analyzed",   value:"18,492", meta:"Last 7 days",   bar:76  },
-    { label:"Total Facebook Posts",   value:"10,428", meta:"Last 7 days",   bar:56  },
-    { label:"Total X/Twitter Posts",  value:"8,064",  meta:"Last 7 days",   bar:44  },
-    { label:"Active Clusters %",      value:"100%",   meta:"All active",    bar:100 },
+    { label:"High Priority Count",   value:"6,287",  meta:"Last 7 days",   bar:34  },
+    { label:"Total Posts Analyzed",  value:"18,492", meta:"Last 7 days",   bar:100 },
+    { label:"Total Facebook Posts",  value:"10,428", meta:"Last 7 days",   bar:56  },
+    { label:"Total X/Twitter Posts", value:"8,064",  meta:"Last 7 days",   bar:44  },
+    { label:"Active Clusters",       value:"8",      meta:"8 of 8 clusters",bar:100 },
   ],
   "14d": [
-    { label:"Critical Posts %",      value:"19%",    meta:"Last 14 days",  bar:19  },
-    { label:"High Priority %",        value:"36%",    meta:"Last 14 days",  bar:36  },
-    { label:"Total Posts Analyzed",   value:"31,864", meta:"Last 14 days",  bar:86  },
-    { label:"Total Facebook Posts",   value:"18,065", meta:"Last 14 days",  bar:62  },
-    { label:"Total X/Twitter Posts",  value:"13,799", meta:"Last 14 days",  bar:52  },
-    { label:"Active Clusters %",      value:"100%",   meta:"All active",    bar:100 },
+    { label:"High Priority Count",   value:"11,471", meta:"Last 14 days",  bar:36  },
+    { label:"Total Posts Analyzed",  value:"31,864", meta:"Last 14 days",  bar:100 },
+    { label:"Total Facebook Posts",  value:"18,065", meta:"Last 14 days",  bar:57  },
+    { label:"Total X/Twitter Posts", value:"13,799", meta:"Last 14 days",  bar:43  },
+    { label:"Active Clusters",       value:"8",      meta:"8 of 8 clusters",bar:100 },
   ],
   "30d": [
-    { label:"Critical Posts %",      value:"17%",    meta:"Last 30 days",  bar:17  },
-    { label:"High Priority %",        value:"33%",    meta:"Last 30 days",  bar:33  },
-    { label:"Total Posts Analyzed",   value:"63,208", meta:"Last 30 days",  bar:96  },
-    { label:"Total Facebook Posts",   value:"35,890", meta:"Last 30 days",  bar:70  },
-    { label:"Total X/Twitter Posts",  value:"27,318", meta:"Last 30 days",  bar:61  },
-    { label:"Active Clusters %",      value:"100%",   meta:"All active",    bar:100 },
+    { label:"High Priority Count",   value:"20,859", meta:"Last 30 days",  bar:33  },
+    { label:"Total Posts Analyzed",  value:"63,208", meta:"Last 30 days",  bar:100 },
+    { label:"Total Facebook Posts",  value:"35,890", meta:"Last 30 days",  bar:57  },
+    { label:"Total X/Twitter Posts", value:"27,318", meta:"Last 30 days",  bar:43  },
+    { label:"Active Clusters",       value:"8",      meta:"8 of 8 clusters",bar:100 },
   ],
 };
 
 // ─── API Calls ────────────────────────────────────────────────────────────────
 async function apiGetClusters()            { return apiFetch("/clusters"); }
 async function apiGetDashboardSummary(r)   { const d = await apiFetch(`/dashboard/summary?date_range=${r}`); return d.kpis; }
+async function apiGetDashboardComments(r)  { const d = await apiFetch(`/dashboard/comments?date_range=${r}&limit=6`); return d.comments; }
 async function apiUpdateEmailAlerts(en)    { return apiFetch("/settings/email-alerts", { method:"PATCH", body: JSON.stringify({ enabled: en }) }); }
 
 // ─── DataService shim ─────────────────────────────────────────────────────────
 const DashboardService = {
   async getClusters()           { return USE_MOCK ? MOCK_CLUSTERS : apiGetClusters(); },
   async getDashboardSummary(r)  { return USE_MOCK ? (MOCK_DASHBOARD_SUMMARY[r] || MOCK_DASHBOARD_SUMMARY["7d"]) : apiGetDashboardSummary(r); },
+  async getDashboardComments(r) { return USE_MOCK ? null : apiGetDashboardComments(r); },
   async updateEmailAlerts(en)   { if (!USE_MOCK) return apiUpdateEmailAlerts(en); },
 };
+
+function dashboardMetaLabel(range) {
+  return {
+    "24h": "Last 24 hours",
+    "3d": "Last 3 days",
+    "7d": "Last 7 days",
+    "14d": "Last 14 days",
+    "30d": "Last 30 days",
+  }[range] || "Recent";
+}
+
+function dashboardBarValue(value, total) {
+  if (!total) return 0;
+  return Math.max(12, Math.min(100, Math.round((value / total) * 100)));
+}
+
+function buildDashboardSummary(posts, range, clusters) {
+  const filtered = filterPosts(posts || [], range, "All");
+  const totalPosts = filtered.length;
+  const highPriorityCount = filtered.filter(post => post.priority === "High" || post.priority === "Critical").length;
+  const facebookPosts = filtered.filter(post => post.source === "Facebook").length;
+  const twitterPosts = filtered.filter(post => post.source === "X").length;
+  const activeClusters = new Set(filtered.map(post => post.clusterId).filter(Boolean)).size;
+  const clusterTotal = Math.max((clusters || []).length, 1);
+  const meta = dashboardMetaLabel(range);
+
+  return [
+    {
+      label: "High Priority Count",
+      value: formatNumber(highPriorityCount),
+      meta,
+      bar: dashboardBarValue(highPriorityCount, totalPosts),
+    },
+    {
+      label: "Total Posts Analyzed",
+      value: formatNumber(totalPosts),
+      meta,
+      bar: dashboardBarValue(totalPosts, Math.max(totalPosts, 1)),
+    },
+    {
+      label: "Total Facebook Posts",
+      value: formatNumber(facebookPosts),
+      meta,
+      bar: dashboardBarValue(facebookPosts, totalPosts),
+    },
+    {
+      label: "Total X/Twitter Posts",
+      value: formatNumber(twitterPosts),
+      meta,
+      bar: dashboardBarValue(twitterPosts, totalPosts),
+    },
+    {
+      label: "Active Clusters",
+      value: formatNumber(activeClusters),
+      meta: `${activeClusters} of ${clusterTotal} clusters`,
+      bar: dashboardBarValue(activeClusters, clusterTotal),
+    },
+  ];
+}
+
+function buildMockDashboardComments(posts, range) {
+  return filterPosts(posts || [], range, "All")
+    .filter(post => Array.isArray(post.topComments))
+    .flatMap(post => post.topComments.map(comment => ({
+      ...comment,
+      source: post.source,
+      pageSource: post.pageSource,
+      clusterId: post.clusterId,
+      location: post.location,
+      likes: toCount(comment.likes),
+    })))
+    .slice(0, 6);
+}
 
 // ─── Render: Cluster Nav ──────────────────────────────────────────────────────
 function renderClusterNav() {
@@ -81,9 +152,9 @@ function renderClusterNav() {
 
 // ─── Render: Dashboard ────────────────────────────────────────────────────────
 function renderDashboard() {
-  const summaryCards = Array.isArray(state.dashboardSummary)
+  const summaryCards = Array.isArray(state.dashboardSummary) && state.dashboardSummary.length
     ? state.dashboardSummary
-    : (MOCK_DASHBOARD_SUMMARY[state.dashboardRange] || []);
+    : buildDashboardSummary(state.posts, state.dashboardRange, state.clusters);
 
   document.getElementById("kpiGrid").innerHTML = summaryCards.map(card => `
     <div class="mini-card ${kpiToneClass(card.label)}">
@@ -106,19 +177,18 @@ function renderDashboard() {
     .slice(0, 4);
   document.getElementById("dashboardPosts").innerHTML = renderPostCards(trendingPosts);
 
-  const commentCards = filterPosts(state.posts, state.dashboardRange, "All")
-    .filter(p => p.topComments)
-    .flatMap(p => p.topComments.map(c => ({ ...c, post: p })))
-    .slice(0, 6);
+  const commentCards = Array.isArray(state.dashboardComments) && state.dashboardComments.length
+    ? state.dashboardComments
+    : buildMockDashboardComments(state.posts, state.dashboardRange);
 
   document.getElementById("dashboardComments").innerHTML = commentCards.map(c => `
     <article class="comment-card">
-      <div class="comment-tag">${c.post.source} comment</div>
-      <small>${c.author} on ${c.post.pageSource} · ${(state.clusters.find(cl => cl.id === c.post.clusterId) || {}).short || ""}</small>
+      <div class="comment-tag">${c.source || "Facebook"} comment</div>
+      <small>${c.author || "Facebook user"} on ${c.pageSource || "Facebook Source"} · ${(state.clusters.find(cl => cl.id === c.clusterId) || {}).short || ""}</small>
       <p>${c.text}</p>
-      <small>From post in ${c.post.location}</small>
+      <small>${formatNumber(toCount(c.likes))} likes · From post in ${c.location || "Philippines"}</small>
     </article>
-  `).join("");
+  `).join("") || `<div class="watch-empty"><strong>No trending comments available.</strong>Import a Facebook comments dataset to populate this panel.</div>`;
 }
 
 // ─── Render: Source Directory ─────────────────────────────────────────────────
@@ -140,8 +210,8 @@ function renderSourceDirectory() {
 
 // ─── Render: Profile Settings ─────────────────────────────────────────────────
 function renderProfileSettings() {
-  document.getElementById("profileUsername").value    = state.profile.username;
-  document.getElementById("profileRole").value        = state.profile.role;
+  document.getElementById("profileUsername").value    = state.profile.name || state.profile.username;
+  document.getElementById("profileRoleLabel").textContent = state.profile.role;
   document.getElementById("profileEmail").value       = state.profile.email;
   document.getElementById("topbarRole").textContent   = state.profile.role;
   document.getElementById("settingsRoleBadge").textContent = state.profile.role;

@@ -1,37 +1,23 @@
 """
-MANA — Admin Routes
-All endpoints require a valid JWT with role = "Admin".
-
-Blueprinted at: /api/admin
-Register in app.py:
-    from routes.admin import admin_bp
-    app.register_blueprint(admin_bp, url_prefix="/api/admin")
-
-Endpoints:
-  POST   /api/admin/auth/login
-  GET    /api/admin/users
-  POST   /api/admin/users
-  PATCH  /api/admin/users/<id>
-  DELETE /api/admin/users/<id>
-  PATCH  /api/admin/users/<id>/status
-  POST   /api/admin/users/<id>/reset-password
-  GET    /api/admin/logs
-  GET    /api/admin/stats
-  GET    /api/admin/settings
-  PATCH  /api/admin/settings/<section>
+MANA — Admin Routes.
 """
 
+from __future__ import annotations
+
+from collections import Counter, defaultdict
+from datetime import timedelta
 from functools import wraps
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import (
-    create_access_token, jwt_required, get_jwt_identity, get_jwt
-)
+
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
+
+from data import now_utc, parse_date_range, priority_label, score_tone
+from models import ActivityLog, Post, SystemSetting, User, db
 
 admin_bp = Blueprint("admin", __name__)
 
-# ── Role Guard Decorator ───────────────────────────────────────────────────────
+
 def admin_required(fn):
-    """Decorator that enforces role = Admin on top of JWT auth."""
     @wraps(fn)
     @jwt_required()
     def wrapper(*args, **kwargs):
@@ -39,172 +25,294 @@ def admin_required(fn):
         if claims.get("role") != "Admin":
             return jsonify({"message": "Admin access required."}), 403
         return fn(*args, **kwargs)
+
     return wrapper
 
 
-# ── Admin Login ────────────────────────────────────────────────────────────────
-@admin_bp.route("/auth/login", methods=["POST"])
-def admin_login():
-    """
-    Body: { username, password }
-    Returns: { token, admin: { id, name, email, role } }
+def current_admin():
+    username = get_jwt_identity()
+    return db.session.get(User, username) if username else None
 
-    TODO: look up user in DB, verify password hash, check role == "Admin"
-    """
-    data     = request.get_json()
-    username = data.get("username", "")
-    password = data.get("password", "")
 
-    # TODO: replace with real DB query
-    # user = User.query.filter_by(username=username).first()
-    # if not user or not user.check_password(password) or user.role != "Admin":
-    #     return jsonify({"message": "Invalid credentials or insufficient role."}), 401
+def get_json():
+    return request.get_json() or {}
 
-    # Pass role in additional_claims so admin_required can read it
-    token = create_access_token(
-        identity=username,
-        additional_claims={"role": "Admin"}
+
+def log_activity(action: str, detail: str, log_type: str = "admin", actor: User | None = None):
+    actor = actor or current_admin()
+    db.session.add(
+        ActivityLog(
+            actor_username=actor.username if actor else None,
+            actor_name=(actor.name or actor.username) if actor else "System",
+            action=action,
+            detail=detail,
+            type=log_type,
+        )
     )
-    return jsonify({
-        "token": token,
-        "admin": { "id": "u1", "name": username, "email": f"{username}@mana.ph", "role": "Admin" }
-    })
 
 
-# ── Users ──────────────────────────────────────────────────────────────────────
+def ensure_unique_user(email: str, username: str, current_username: str | None = None):
+    email_match = User.query.filter(User.email == email)
+    username_match = User.query.filter(User.username == username)
+    if current_username:
+        email_match = email_match.filter(User.username != current_username)
+        username_match = username_match.filter(User.username != current_username)
+    if email_match.first():
+        return "Email is already in use."
+    if username_match.first():
+        return "Username is already in use."
+    return None
+
+
+def username_from_email(email: str):
+    base = email.split("@", 1)[0].strip().lower().replace(" ", ".")
+    candidate = base
+    index = 2
+    while db.session.get(User, candidate):
+        candidate = f"{base}{index}"
+        index += 1
+    return candidate
+
+
 @admin_bp.route("/users", methods=["GET"])
 @admin_required
 def list_users():
-    """
-    Query: search, role, status
-    Returns: User[]
-    TODO: User.query.filter(…).all()
-    """
-    search = request.args.get("search", "")
-    role   = request.args.get("role", "")
-    status = request.args.get("status", "")
-    # TODO: build SQLAlchemy query with filters
-    return jsonify([])
+    search = (request.args.get("search") or "").strip().lower()
+    role = request.args.get("role") or ""
+    status = request.args.get("status") or ""
+
+    query = User.query.order_by(User.created_at.asc())
+    if role and role != "all":
+        query = query.filter(User.role == role)
+    if status and status != "all":
+        query = query.filter(User.status == status)
+
+    users = query.all()
+    if search:
+        users = [
+            user for user in users
+            if search in (user.name or user.username).lower()
+            or search in user.email.lower()
+            or search in user.username.lower()
+        ]
+    return jsonify([user.to_api_dict() for user in users])
 
 
 @admin_bp.route("/users", methods=["POST"])
 @admin_required
 def create_user():
-    """
-    Body: { name, email, role, password }
-    Returns: User
-    TODO: hash password, create User record, commit
-    """
-    data = request.get_json()
-    # TODO: new_user = User(name=data["name"], email=data["email"], role=data["role"])
-    #       new_user.set_password(data["password"])
-    #       db.session.add(new_user); db.session.commit()
-    return jsonify({"message": "User created", "id": "new_id"}), 201
+    data = get_json()
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    role = (data.get("role") or "LGU Analyst").strip()
+    password = data.get("password") or ""
+    username = (data.get("username") or "").strip().lower() or username_from_email(email)
+
+    if not name:
+        return jsonify({"message": "Name is required."}), 400
+    if not email or "@" not in email:
+        return jsonify({"message": "A valid email is required."}), 400
+    if role not in {"Admin", "LGU Analyst", "Viewer"}:
+        return jsonify({"message": "Invalid role."}), 400
+    if len(password) < 8:
+        return jsonify({"message": "Password must be at least 8 characters."}), 400
+
+    conflict = ensure_unique_user(email, username)
+    if conflict:
+        return jsonify({"message": conflict}), 409
+
+    user = User(username=username, name=name, email=email, role=role, status="Active")
+    user.set_password(password)
+    db.session.add(user)
+    log_activity("User created", f"Created {name} ({role})", "admin")
+    db.session.commit()
+    return jsonify(user.to_api_dict()), 201
 
 
 @admin_bp.route("/users/<user_id>", methods=["PATCH"])
 @admin_required
 def update_user(user_id):
-    """Body: { name?, email?, role? }  Returns: User"""
-    data = request.get_json()
-    # TODO: user = User.query.get_or_404(user_id)
-    #       for k, v in data.items(): setattr(user, k, v)
-    #       db.session.commit()
-    return jsonify({"id": user_id, **data})
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"message": "User not found."}), 404
+
+    data = get_json()
+    name = (data.get("name") or user.name or user.username).strip()
+    email = (data.get("email") or user.email).strip().lower()
+    role = (data.get("role") or user.role).strip()
+
+    if not name:
+        return jsonify({"message": "Name is required."}), 400
+    if not email or "@" not in email:
+        return jsonify({"message": "A valid email is required."}), 400
+    if role not in {"Admin", "LGU Analyst", "Viewer"}:
+        return jsonify({"message": "Invalid role."}), 400
+
+    conflict = ensure_unique_user(email, user.username, current_username=user.username)
+    if conflict:
+        return jsonify({"message": conflict}), 409
+
+    user.name = name
+    user.email = email
+    user.role = role
+    log_activity("User updated", f"Updated {name} ({role})", "admin")
+    db.session.commit()
+    return jsonify(user.to_api_dict())
 
 
 @admin_bp.route("/users/<user_id>", methods=["DELETE"])
 @admin_required
 def delete_user(user_id):
-    """Returns: { success }"""
-    # TODO: User.query.filter_by(id=user_id).delete(); db.session.commit()
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"message": "User not found."}), 404
+    if user.username == get_jwt_identity():
+        return jsonify({"message": "You cannot delete your own admin account."}), 400
+
+    name = user.name or user.username
+    ActivityLog.query.filter_by(actor_username=user.username).delete()
+    db.session.delete(user)
+    log_activity("User deleted", f"Deleted {name}", "admin")
+    db.session.commit()
     return jsonify({"success": True})
 
 
 @admin_bp.route("/users/<user_id>/status", methods=["PATCH"])
 @admin_required
 def set_user_status(user_id):
-    """Body: { status: "Active"|"Suspended"|"Inactive" }  Returns: { id, status }"""
-    status = request.get_json().get("status")
-    # TODO: user = User.query.get_or_404(user_id); user.status = status; db.session.commit()
-    return jsonify({"id": user_id, "status": status})
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"message": "User not found."}), 404
+
+    status = (get_json().get("status") or "").strip()
+    if status not in {"Active", "Suspended", "Inactive"}:
+        return jsonify({"message": "Invalid status."}), 400
+    user.status = status
+    log_activity("User status changed", f"{user.name or user.username} set to {status}", "admin")
+    db.session.commit()
+    return jsonify({"id": user.username, "status": user.status})
 
 
 @admin_bp.route("/users/<user_id>/reset-password", methods=["POST"])
 @admin_required
 def reset_password(user_id):
-    """Body: { new_password }  Returns: { success }"""
-    new_pw = request.get_json().get("new_password")
-    # TODO: user = User.query.get_or_404(user_id); user.set_password(new_pw); db.session.commit()
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"message": "User not found."}), 404
+
+    new_password = get_json().get("new_password") or ""
+    if len(new_password) < 8:
+        return jsonify({"message": "Password must be at least 8 characters."}), 400
+    user.set_password(new_password)
+    log_activity("Password reset", f"Reset password for {user.name or user.username}", "admin")
+    db.session.commit()
     return jsonify({"success": True})
 
 
-# ── Logs ───────────────────────────────────────────────────────────────────────
 @admin_bp.route("/logs", methods=["GET"])
 @admin_required
 def get_logs():
-    """
-    Query: user_id, type, limit
-    Returns: ActivityLog[]
-    TODO: ActivityLog.query.filter(…).order_by(ActivityLog.created_at.desc()).limit(limit).all()
-    """
     user_id = request.args.get("user_id")
-    log_type= request.args.get("type")
-    limit   = int(request.args.get("limit", 50))
-    return jsonify([])
+    log_type = request.args.get("type")
+    limit = max(1, min(int(request.args.get("limit", 50)), 200))
+
+    query = ActivityLog.query.order_by(ActivityLog.created_at.desc())
+    if user_id:
+        query = query.filter(ActivityLog.actor_username == user_id)
+    if log_type and log_type != "all":
+        query = query.filter(ActivityLog.type == log_type)
+
+    logs = query.limit(limit).all()
+    return jsonify([log.to_api_dict() for log in logs])
 
 
-# ── Stats ──────────────────────────────────────────────────────────────────────
 @admin_bp.route("/stats", methods=["GET"])
 @admin_required
 def get_stats():
-    """
-    Query: date_range (7d | 14d | 30d)
-    Returns: DashboardStats
-    TODO: Aggregate Post counts, sentiment scores, keywords from DB
-          filtered by created_at >= now - timedelta(days=N)
-    """
     date_range = request.args.get("date_range", "7d")
-    return jsonify({
-        "totalPosts": 0, "fbPosts": 0, "xPosts": 0,
-        "critical": 0, "high": 0, "moderate": 0, "low": 0,
-        "topKeywords": [],
-        "sentiment": {"negative": 0, "neutral": 0, "positive": 0},
-        "trendLabels": [], "trendFb": [], "trendX": [],
-        "priorityTrend": {"critical": [], "high": []},
-    })
+    cutoff = now_utc() - parse_date_range(date_range)
+    posts = Post.query.filter(Post.date >= cutoff).order_by(Post.date.asc()).all()
+
+    total_posts = len(posts)
+    fb_posts = sum(1 for post in posts if post.source == "Facebook")
+    x_posts = sum(1 for post in posts if post.source == "X")
+    critical = sum(1 for post in posts if post.priority == "Critical")
+    high = sum(1 for post in posts if post.priority == "High")
+    moderate = sum(1 for post in posts if post.priority == "Moderate")
+    low = sum(1 for post in posts if post.priority == "Monitoring")
+
+    keyword_counts = Counter()
+    sentiment_counts = {"negative": 0, "neutral": 0, "positive": 0}
+    bucket_counts = defaultdict(lambda: {"Facebook": 0, "X": 0, "critical": 0, "high": 0})
+
+    for post in posts:
+        for keyword in post.keywords:
+            keyword_counts[keyword] += 1
+        sentiment_counts[score_tone(post.sentiment_score)] += 1
+        key = post.date.strftime("%b %d") if date_range == "7d" else post.date.strftime("%b %d")
+        bucket_counts[key][post.source] += 1
+        if post.priority == "Critical":
+            bucket_counts[key]["critical"] += 1
+        if post.priority == "High":
+            bucket_counts[key]["high"] += 1
+
+    labels = sorted(bucket_counts.keys(), key=lambda value: posts[[p.date.strftime("%b %d") for p in posts].index(value)].date if posts else now_utc())
+    trend_fb = [bucket_counts[label]["Facebook"] for label in labels]
+    trend_x = [bucket_counts[label]["X"] for label in labels]
+    critical_trend = [bucket_counts[label]["critical"] for label in labels]
+    high_trend = [bucket_counts[label]["high"] for label in labels]
+
+    total_sentiment = max(sum(sentiment_counts.values()), 1)
+    top_keywords = keyword_counts.most_common(6)
+    max_keyword = top_keywords[0][1] if top_keywords else 1
+
+    return jsonify(
+        {
+            "totalPosts": total_posts,
+            "fbPosts": fb_posts,
+            "xPosts": x_posts,
+            "critical": critical,
+            "high": high,
+            "moderate": moderate,
+            "low": low,
+            "topKeywords": [
+                {"word": word, "count": count, "pct": round((count / max_keyword) * 100)}
+                for word, count in top_keywords
+            ],
+            "sentiment": {
+                key: round((value / total_sentiment) * 100) for key, value in sentiment_counts.items()
+            },
+            "trendLabels": labels,
+            "trendFb": trend_fb,
+            "trendX": trend_x,
+            "priorityTrend": {"critical": critical_trend, "high": high_trend},
+        }
+    )
 
 
-# ── Settings ───────────────────────────────────────────────────────────────────
 @admin_bp.route("/settings", methods=["GET"])
 @admin_required
 def get_settings():
-    """
-    Returns: { general, security, notifications, system }
-    TODO: SystemSettings.query.first() or read from config file / env vars
-    """
-    return jsonify({
-        "general":       {},
-        "security":      {},
-        "notifications": {},
-        "system":        {},
-    })
+    rows = SystemSetting.query.order_by(SystemSetting.section.asc()).all()
+    return jsonify({row.section: row.payload for row in rows})
 
 
 @admin_bp.route("/settings/<section>", methods=["PATCH"])
 @admin_required
 def update_settings(section):
-    """
-    Path param: section = general | security | notifications | system
-    Body: partial settings dict
-    Returns: { success, section, data }
-    TODO: validate section, update SystemSettings record, commit
-    """
     allowed = {"general", "security", "notifications", "system"}
     if section not in allowed:
         return jsonify({"message": f"Invalid section. Must be one of: {allowed}"}), 400
-    data = request.get_json()
-    # TODO: settings = SystemSettings.query.first()
-    #       for k, v in data.items(): setattr(settings, f"{section}_{k}", v)
-    #       db.session.commit()
-    return jsonify({"success": True, "section": section, "data": data})
+
+    setting = db.session.get(SystemSetting, section)
+    if not setting:
+        setting = SystemSetting(section=section)
+        setting.set_payload({})
+        db.session.add(setting)
+
+    payload = setting.payload
+    payload.update(get_json())
+    setting.set_payload(payload)
+    log_activity("Settings updated", f"Updated {section} settings", "system")
+    db.session.commit()
+    return jsonify({"success": True, "section": section, "data": setting.payload})

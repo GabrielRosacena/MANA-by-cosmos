@@ -33,15 +33,25 @@ const PAGE_TITLES = {
 // INIT
 // ═══════════════════════════════════════════════════════════════════════════════
 async function adminInit() {
-  const { data: { session } } = await supabase.auth.getSession();
-  const sessionRole = session?.user.user_metadata?.role || (session?.user.email === "admin@mana.ph" ? "Admin" : null);
-  if (session && sessionRole === "Admin") {
-    const name = session.user.user_metadata?.name || session.user.email;
-    adminState.admin = { id: session.user.id, name, email: session.user.email, role: "Admin" };
-    showAdminApp();
-    await loadAllData();
+  const token = getAdminToken();
+  if (!token) {
+    window.location.href = "../index.html";
     return;
   }
+  try {
+    const profile = await AdminData.getCurrentAdmin();
+    if (profile.role === "Admin") {
+      adminState.admin = {
+        id: profile.username,
+        name: profile.name || profile.username,
+        email: profile.email,
+        role: profile.role,
+      };
+      showAdminApp();
+      await loadAllData();
+      return;
+    }
+  } catch (err) {}
   window.location.href = "../index.html";
 }
 
@@ -64,7 +74,14 @@ function showAdminApp() {
 }
 
 document.getElementById("adminLogoutBtn").addEventListener("click", async () => {
-  await supabase.auth.signOut();
+  await fetch("http://localhost:5000/api/auth/logout", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getAdminToken()}`,
+    },
+  }).catch(() => {});
+  localStorage.removeItem("mana-token");
   clearAdminToken();
   window.location.href = "../index.html";
 });
@@ -304,7 +321,9 @@ function renderUsersTable() {
 
   // Pagination
   const totalPages = Math.ceil(total / perPage);
-  document.getElementById("paginationInfo").textContent = `Showing ${start+1}–${Math.min(start+perPage, total)} of ${total}`;
+  document.getElementById("paginationInfo").textContent = total
+    ? `Showing ${start + 1}–${Math.min(start + perPage, total)} of ${total}`
+    : "Showing 0 of 0";
   document.getElementById("paginationBtns").innerHTML = Array.from({length: totalPages}, (_, i) =>
     `<button class="page-btn ${page === i+1 ? "active" : ""}" onclick="goToUserPage(${i+1})">${i+1}</button>`
   ).join("");
@@ -367,24 +386,22 @@ document.getElementById("userForm").addEventListener("submit", async e => {
   if (!adminState.editingUserId) {
     if (!data.name)  { adminToast("Validation Error", "Name is required."); return; }
     if (!data.email) { adminToast("Validation Error", "Email is required."); return; }
-    if (!data.password || data.password.length < 6) {
-      adminToast("Validation Error", "Password must be at least 6 characters.");
+    if (!data.password || data.password.length < 8) {
+      adminToast("Validation Error", "Password must be at least 8 characters.");
       return;
     }
   }
   try {
     if (adminState.editingUserId) {
       await AdminData.updateUser(adminState.editingUserId, data);
-      AdminData.insertLog("User updated", `${data.name} — role: ${data.role}`, "admin");
       adminToast("User updated", `${data.name}'s profile has been updated.`);
     } else {
       await AdminData.createUser(data);
-      AdminData.insertLog("User created", `${data.name} (${data.email}) — ${data.role}`, "admin");
       adminToast("User created", `${data.name} has been added to the system.`);
     }
     closeModal("userModal");
-    adminState.users = await AdminData.getUsers(adminState.userFilters);
-    renderUsersTable();
+    await loadUsers();
+    await loadLogs();
   } catch (err) {
     adminToast("Error", err.message || "Could not save user.");
   }
@@ -401,11 +418,13 @@ document.getElementById("resetPasswordForm").addEventListener("submit", async e 
   e.preventDefault();
   const newPw  = document.getElementById("newPasswordInput").value.trim();
   const confirm= document.getElementById("confirmPasswordInput").value.trim();
+  if (newPw.length < 8) { adminToast("Validation Error", "Password must be at least 8 characters."); return; }
   if (newPw !== confirm) { adminToast("Mismatch", "Passwords do not match."); return; }
   try {
     await AdminData.resetPassword(adminState.editingUserId, newPw);
     closeModal("resetPasswordModal");
     adminToast("Password reset", "The user's password has been updated.");
+    await loadLogs();
   } catch (err) {
     adminToast("Error", err.message);
   }
@@ -420,10 +439,9 @@ async function toggleUserStatus(userId, currentStatus) {
   adminState.confirmCallback = async () => {
     try {
       await AdminData.setUserStatus(userId, newStatus);
-      AdminData.insertLog(newStatus === "Suspended" ? "User suspended" : "User reactivated", user.name, "admin");
       adminToast("Status updated", `${user.name} has been ${newStatus === "Suspended" ? "suspended" : "reactivated"}.`);
-      adminState.users = await AdminData.getUsers(adminState.userFilters);
-      renderUsersTable();
+      await loadUsers();
+      await loadLogs();
     } catch (err) {
       adminToast("Error", err.message);
     }
@@ -438,10 +456,9 @@ function confirmDeleteUser(userId, userName) {
   adminState.confirmCallback = async () => {
     try {
       await AdminData.deleteUser(userId);
-      AdminData.insertLog("User deleted", userName, "admin");
       adminToast("User deleted", `${userName} has been removed from the system.`);
-      adminState.users = await AdminData.getUsers(adminState.userFilters);
-      renderUsersTable();
+      await loadUsers();
+      await loadLogs();
     } catch (err) {
       adminToast("Error", err.message);
     }

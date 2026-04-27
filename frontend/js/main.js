@@ -13,6 +13,7 @@ const state = {
   posts:            [],
   keywords:         [],
   dashboardSummary: [],
+  dashboardComments: [],
   analytics:        {},
 
   // UI state
@@ -58,18 +59,28 @@ async function init() {
 
 async function loadAppData() {
   try {
-    const [clusters, posts, watchlist, keywords] = await Promise.all([
+    const [clusters, posts, watchlist, keywords, dashboardComments] = await Promise.all([
       DashboardService.getClusters(),
       PostsService.getPosts(),
       PostsService.getWatchlist(),
       PostsService.getKeywords(),
+      DashboardService.getDashboardComments(state.dashboardRange).catch(() => []),
     ]);
 
     state.clusters = clusters;
-    state.posts    = posts;
+    state.posts    = posts.map(post => ({
+      ...post,
+      reactions: toCount(post.reactions),
+      shares: toCount(post.shares),
+      likes: toCount(post.likes),
+      reposts: toCount(post.reposts),
+      comments: toCount(post.comments),
+      views: toCount(post.views),
+    }));
     state.pinned   = new Set(watchlist.pinned || []);
     state.keywords = keywords;
-    state.statuses = Object.fromEntries(posts.map(p => [p.id, p.status]));
+    state.dashboardComments = dashboardComments;
+    state.statuses = Object.fromEntries(state.posts.map(p => [p.id, p.status]));
 
     // In mock mode, restore any locally-saved status overrides
     if (USE_MOCK) {
@@ -78,7 +89,7 @@ async function loadAppData() {
     }
 
     state.analytics        = await ChartsService.getAnalytics(state.analyticsRange);
-    state.dashboardSummary = await DashboardService.getDashboardSummary(state.dashboardRange);
+    state.dashboardSummary = buildDashboardSummary(state.posts, state.dashboardRange, state.clusters);
   } catch (err) {
     console.error("Data load failed:", err);
     showToast("Data load error", err.message || "Could not load data. Check backend connection.");
@@ -117,7 +128,8 @@ function bindStaticControls() {
 
   document.getElementById("dashboardRange").addEventListener("change", async e => {
     state.dashboardRange  = e.target.value;
-    state.dashboardSummary = await DashboardService.getDashboardSummary(state.dashboardRange).catch(() => state.dashboardSummary);
+    state.dashboardSummary = buildDashboardSummary(state.posts, state.dashboardRange, state.clusters);
+    state.dashboardComments = await DashboardService.getDashboardComments(state.dashboardRange).catch(() => state.dashboardComments);
     renderDashboard();
     renderSourceDirectory();
   });

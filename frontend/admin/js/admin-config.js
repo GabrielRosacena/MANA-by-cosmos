@@ -13,10 +13,10 @@ const SUPABASE_URL = "https://gizuoookwwkximbqvcpx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_cj0YjBeAVubMaZVOyYXNyQ_D0en0BF_";
 
 const ADMIN_API_BASE = "http://localhost:5000/api/admin";
-const USE_MOCK = true;
+const USE_MOCK = false;
 
 // ─── Admin JWT Helpers ────────────────────────────────────────────────────────
-function getAdminToken()       { return localStorage.getItem("mana-admin-token"); }
+function getAdminToken()       { return localStorage.getItem("mana-admin-token") || localStorage.getItem("mana-token"); }
 function setAdminToken(t)      { localStorage.setItem("mana-admin-token", t); }
 function clearAdminToken()     { localStorage.removeItem("mana-admin-token"); }
 

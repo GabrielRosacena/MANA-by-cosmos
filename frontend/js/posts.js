@@ -111,8 +111,17 @@ function renderPostCards(postList) {
     const sentiment = getDominantSentiment(post.sentimentScore);
     // ── metrics: match original exactly (metric-pill spans, no sentiment row)
     const metrics = isFB
-      ? [{ label:"Shares", value:formatNumber(post.shares) }, { label:"Comments", value:formatNumber(post.comments) }]
-      : [{ label:"Likes",  value:formatNumber(post.likes)  }, { label:"Reposts",  value:formatNumber(post.reposts)  }, { label:"Comments", value:formatNumber(post.comments) }];
+      ? [
+          { label:"Reactions", value:formatNumber(post.reactions) },
+          { label:"Likes", value:formatNumber(post.likes || post.reactions) },
+          { label:"Shares", value:formatNumber(post.shares) },
+          { label:"Comments", value:formatNumber(post.comments) },
+        ]
+      : [
+          { label:"Likes", value:formatNumber(post.likes) },
+          { label:"Reposts", value:formatNumber(post.reposts) },
+          { label:"Comments", value:formatNumber(post.comments) },
+        ];
 
     return `
       <article class="post-card">
@@ -138,9 +147,6 @@ function renderPostCards(postList) {
         </div>
 
         <div class="post-text">${post.caption}</div>
-
-        ${isFB ? renderFacebookReactions(post.reactions) : ""}
-
         <div class="metric-row">
           ${metrics.map(m => `<span class="metric-pill">${m.label}: ${m.value}</span>`).join("")}
         </div>
@@ -171,21 +177,6 @@ function renderPostCards(postList) {
         ` : ""}
       </article>`;
   }).join("");
-}
-
-// ── Reactions: split total into proportional emoji pills (matches original exactly)
-function renderFacebookReactions(totalReactions) {
-  const parts = [
-    { emoji: "👍", value: Math.round(totalReactions * 0.48) },
-    { emoji: "❤️", value: Math.round(totalReactions * 0.24) },
-    { emoji: "😢", value: Math.round(totalReactions * 0.17) },
-    { emoji: "😮", value: Math.round(totalReactions * 0.11) }
-  ];
-  return `
-    <div class="fb-reactions">
-      ${parts.map(item => `<span class="reaction-pill">${item.emoji} ${formatCompact(item.value)}</span>`).join("")}
-    </div>
-  `;
 }
 
 // ─── Render: Watchlist ────────────────────────────────────────────────────────

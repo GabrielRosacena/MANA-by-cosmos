@@ -32,7 +32,7 @@ async function apiUpdateProfile(u)  { return apiFetch("/auth/me", { method: "PAT
 async function apiChangePassword(current, next) {
   return apiFetch("/auth/change-password", {
     method: "POST",
-    body: JSON.stringify({ current_password: current, new_password: next }),
+    body: JSON.stringify({ current_password: current, new_password: next, confirm_password: next }),
   });
 }
 async function apiRequestEmailChange(newEmail) {
@@ -44,18 +44,19 @@ async function apiVerifyEmailChange(newEmail, code) {
 
 // ─── DataService shim (used by main.js) ──────────────────────────────────────
 const AuthService = {
-  async login(email, password, remember) {
-    if (!email || !password) throw new Error("Email and password required.");
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
-    const role = data.user.user_metadata?.role || (data.user.email === "admin@mana.ph" ? "Admin" : "LGU Analyst");
-    const name = data.user.user_metadata?.name || data.user.email;
-    return { _uid: data.user.id, user: { username: name, role, email: data.user.email } };
+  async login(identity, password, remember) {
+    const data = await apiLogin(identity, password, remember);
+    if (data.token) {
+      setToken(data.token);
+      if (data.user?.role === "Admin") localStorage.setItem("mana-admin-token", data.token);
+    }
+    return { _uid: data.user.username, user: data.user };
   },
 
   async logout() {
-    await supabase.auth.signOut();
+    await apiLogout();
     clearToken();
+    localStorage.removeItem("mana-admin-token");
   },
 
   async getProfile() {
@@ -110,14 +111,6 @@ async function handleLogin(event) {
     const result = await AuthService.login(identity, password, remember);
     state.profile = result.user || state.profile;
 
-    supabase.from("activity_logs").insert({
-      user_id:   result._uid,
-      user_name: state.profile.username,
-      action:    "Logged in",
-      detail:    state.profile.role === "Admin" ? "Via admin panel" : "Via main dashboard",
-      type:      "auth",
-    }).then(() => {}).catch(() => {});
-
     if (state.profile.role === "Admin") {
       window.location.href = "admin/index.html";
       return;
@@ -148,28 +141,34 @@ async function doLogout() {
 }
 
 async function checkRememberedSession() {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return;
-  const role = session.user.user_metadata?.role || (session.user.email === "admin@mana.ph" ? "Admin" : "LGU Analyst");
-  if (role === "Admin") {
-    window.location.href = "admin/index.html";
-    return;
+  if (!getToken()) return;
+  try {
+    const profile = await AuthService.getProfile();
+    state.profile = {
+      username: profile.username,
+      name: profile.name || profile.username,
+      role: profile.role,
+      email: profile.email,
+    };
+    if (profile.role === "Admin") {
+      localStorage.setItem("mana-admin-token", getToken());
+      window.location.href = "admin/index.html";
+      return;
+    }
+    renderProfileSettings();
+    showApp();
+  } catch (err) {
+    clearToken();
+    localStorage.removeItem("mana-admin-token");
   }
-  state.profile = {
-    username: session.user.user_metadata?.name || session.user.email,
-    role,
-    email: session.user.email,
-  };
-  renderProfileSettings();
-  showApp();
 }
 
 // ─── Profile & Password UI ────────────────────────────────────────────────────
 async function saveProfile() {
   const username = document.getElementById("profileUsername").value.trim() || state.profile.username;
-  const role = document.getElementById("profileRole").value.trim() || state.profile.role;
   try {
-    state.profile = await AuthService.updateProfile({ username, role });
+    const profile = await AuthService.updateProfile({ name: username });
+    state.profile = { ...state.profile, ...profile };
     persistLocalPreferences();
     renderProfileSettings();
     showToast("Profile saved", "Profile details were updated.");
@@ -184,8 +183,12 @@ async function savePassword() {
   const confirm = document.getElementById("confirmPassword").value.trim();
   if (!current || !next || !confirm) { showToast("Incomplete", "Fill in all password fields before saving."); return; }
   if (next !== confirm) { showToast("Password mismatch", "New password and confirmation do not match."); return; }
+  if (next.length < 8) { showToast("Password too short", "New password must be at least 8 characters."); return; }
   try {
-    await AuthService.changePassword(current, next);
+    await apiFetch("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ current_password: current, new_password: next, confirm_password: confirm }),
+    });
     showToast("Password saved", "Your password has been updated.");
     clearPasswordFields();
   } catch (err) {

@@ -8,6 +8,7 @@
 function formatNumber(n)  { return new Intl.NumberFormat("en-US").format(n); }
 function formatCompact(n) { return new Intl.NumberFormat("en-US", { notation:"compact", maximumFractionDigits:1 }).format(n); }
 function formatDate(d)    { return new Date(d).toLocaleString("en-US", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" }); }
+function toCount(value)   { return Number.isFinite(Number(value)) ? Number(value) : 0; }
 
 // ─── Post Engagement ──────────────────────────────────────────────────────────
 function getEngagement(post) {
@@ -17,10 +18,8 @@ function getEngagement(post) {
 }
 
 // ─── Post Filtering & Sorting ─────────────────────────────────────────────────
-const CURRENT_DATE = "2026-04-26T23:59:59";
-
 function matchesDateRange(postDate, range) {
-  const diffDays = (new Date(CURRENT_DATE) - new Date(postDate)) / (1000 * 60 * 60 * 24);
+  const diffDays = (Date.now() - new Date(postDate).getTime()) / (1000 * 60 * 60 * 24);
   if (range === "24h") return diffDays <= 1;
   if (range === "3d")  return diffDays <= 3;
   if (range === "7d")  return diffDays <= 7;
