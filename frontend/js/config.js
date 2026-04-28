@@ -30,19 +30,29 @@ function clearToken()      { localStorage.removeItem("mana-token"); }
  * @returns {Promise<any>}        parsed JSON response
  */
 async function apiFetch(endpoint, options = {}) {
+  const { skipAuthRedirect = false, ...fetchOptions } = options;
   const token = getToken();
   const headers = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(options.headers || {}),
+    ...(fetchOptions.headers || {}),
   };
 
-  const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, { ...fetchOptions, headers });
+  } catch (err) {
+    throw new Error(err?.message || "Failed to fetch");
+  }
 
   if (res.status === 401) {
-    clearToken();
-    showAuthView();
-    throw new Error("Session expired. Please sign in again.");
+    const shouldRedirect = !skipAuthRedirect && endpoint === "/auth/me";
+    if (shouldRedirect) {
+      clearToken();
+      showAuthView();
+      throw new Error("Session expired. Please sign in again.");
+    }
+    throw new Error("Unauthorized");
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

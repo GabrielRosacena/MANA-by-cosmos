@@ -205,15 +205,25 @@ function handleDocumentClick(event) {
   }
 }
 
-function handleDocumentChange(event) {
+async function handleDocumentChange(event) {
   if (event.target.matches("[data-status-select]")) {
     const postId = event.target.dataset.statusSelect;
     const status = event.target.value;
     state.statuses[postId] = status;
     applyStatusStyle(event.target, status);
-    PostsService.updatePostStatus(postId, status).catch(() => {});
     persistLocalPreferences();
-    showToast("Post status updated", "The operational status has been updated.");
+    try {
+      const result = await PostsService.updatePostStatus(postId, status);
+      showToast(
+        result?.localOnly ? "Status updated locally" : "Post status updated",
+        result?.localOnly
+          ? "The operational status was saved in this browser for now."
+          : "The operational status has been updated."
+      );
+    } catch (err) {
+      showToast("Status saved locally", "The card updated in the dashboard, but the backend request failed.");
+      console.warn("Status update failed:", err);
+    }
   }
   if (event.target.matches("#clusterSeverityFilter")) {
     applySeverityStyle(event.target, event.target.value);
