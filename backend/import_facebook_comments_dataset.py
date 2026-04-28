@@ -15,6 +15,7 @@ from pathlib import Path
 from app import app, ensure_database
 from data import extract_location, infer_cluster, now_utc
 from models import Comment, Post, db
+from preprocessing import save_preprocessed_text
 
 
 def safe_int(value):
@@ -29,7 +30,7 @@ def comment_id_for(item: dict):
         [
             item.get("facebookUrl") or "",
             item.get("postTitle") or "",
-            item.get("text") or "",
+            item.get("text") or item.get("comment") or item.get("body") or item.get("message") or "",
             str(item.get("likesCount") or "0"),
         ]
     )
@@ -37,7 +38,7 @@ def comment_id_for(item: dict):
 
 
 def normalize_item(item: dict, post: Post | None):
-    text = (item.get("text") or "").strip()
+    text = (item.get("text") or item.get("comment") or item.get("body") or item.get("message") or "").strip()
     title = (item.get("postTitle") or "").strip()
     combined = f"{title}\n{text}".strip()
     inferred_cluster, _keywords = infer_cluster(combined)
@@ -61,14 +62,23 @@ def normalize_item(item: dict, post: Post | None):
 
 def import_dataset(file_path: Path):
     payload = json.loads(file_path.read_text(encoding="utf-8"))
-    inserted = updated = skipped = 0
+    inserted = updated = skipped = processed = errors = 0
 
     ensure_database()
     with app.app_context():
         for item in payload:
-            text = (item.get("text") or "").strip()
+            text = (item.get("text") or item.get("comment") or item.get("body") or item.get("message") or "").strip()
             post_url = item.get("facebookUrl") or ""
             if not text or not post_url:
+                processed_row, processed_payload = save_preprocessed_text(
+                    item=item,
+                    raw_id=comment_id_for(item),
+                    record_type="comment",
+                    fallback_text=text,
+                )
+                db.session.add(processed_row)
+                if processed_payload["preprocessing_status"] == "error":
+                    errors += 1
                 skipped += 1
                 continue
 
@@ -84,9 +94,32 @@ def import_dataset(file_path: Path):
                 db.session.add(Comment(**normalized))
                 inserted += 1
 
+            processed_row, processed_payload = save_preprocessed_text(
+                item=item,
+                raw_id=normalized["id"],
+                record_type="comment",
+                fallback_text=normalized["text"],
+            )
+            db.session.add(processed_row)
+            status = processed_payload["preprocessing_status"]
+            if status == "processed":
+                processed += 1
+            elif status == "skipped":
+                skipped += 1
+            else:
+                errors += 1
+
         db.session.commit()
 
-    return inserted, updated, skipped
+    summary = {
+        "total_records_loaded": len(payload),
+        "inserted": inserted,
+        "updated": updated,
+        "processed": processed,
+        "skipped": skipped,
+        "errors": errors,
+    }
+    return summary
 
 
 def main():
@@ -98,11 +131,14 @@ def main():
     if not file_path.exists():
         raise SystemExit(f"Dataset file not found: {file_path}")
 
-    inserted, updated, skipped = import_dataset(file_path)
+    summary = import_dataset(file_path)
     print(f"Imported comments dataset from {file_path}")
-    print(f"Inserted: {inserted}")
-    print(f"Updated: {updated}")
-    print(f"Skipped: {skipped}")
+    print(f"Total records loaded: {summary['total_records_loaded']}")
+    print(f"Inserted: {summary['inserted']}")
+    print(f"Updated: {summary['updated']}")
+    print(f"Total records processed: {summary['processed']}")
+    print(f"Total records skipped: {summary['skipped']}")
+    print(f"Total errors: {summary['errors']}")
 
 
 if __name__ == "__main__":

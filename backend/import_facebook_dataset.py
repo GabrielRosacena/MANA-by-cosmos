@@ -23,6 +23,7 @@ from data import (
     PRIORITY_ORDER,
 )
 from models import Post, db
+from preprocessing import save_preprocessed_text
 
 
 def parse_iso_datetime(value: str):
@@ -32,7 +33,7 @@ def parse_iso_datetime(value: str):
 
 
 def normalize_item(item: dict):
-    text = (item.get("text") or "").strip()
+    text = (item.get("text") or item.get("caption") or item.get("content") or "").strip()
     cluster, keywords = infer_cluster(text)
     engagement = int(item.get("likes") or 0) + int(item.get("comments") or 0) + int(item.get("shares") or 0)
     priority = infer_priority(text, engagement)
@@ -70,7 +71,7 @@ def normalize_item(item: dict):
 
 def import_dataset(file_path: Path):
     payload = json.loads(file_path.read_text(encoding="utf-8"))
-    inserted = updated = 0
+    inserted = updated = processed = skipped = errors = 0
 
     ensure_database()
     with app.app_context():
@@ -84,9 +85,32 @@ def import_dataset(file_path: Path):
             else:
                 db.session.add(Post(**normalized))
                 inserted += 1
+
+            processed_row, processed_payload = save_preprocessed_text(
+                item=item,
+                raw_id=normalized["id"],
+                record_type="post",
+                fallback_text=normalized["caption"],
+            )
+            db.session.add(processed_row)
+            status = processed_payload["preprocessing_status"]
+            if status == "processed":
+                processed += 1
+            elif status == "skipped":
+                skipped += 1
+            else:
+                errors += 1
         db.session.commit()
 
-    return inserted, updated
+    summary = {
+        "total_records_loaded": len(payload),
+        "inserted": inserted,
+        "updated": updated,
+        "processed": processed,
+        "skipped": skipped,
+        "errors": errors,
+    }
+    return summary
 
 
 def main():
@@ -98,10 +122,14 @@ def main():
     if not file_path.exists():
         raise SystemExit(f"Dataset file not found: {file_path}")
 
-    inserted, updated = import_dataset(file_path)
+    summary = import_dataset(file_path)
     print(f"Imported dataset from {file_path}")
-    print(f"Inserted: {inserted}")
-    print(f"Updated: {updated}")
+    print(f"Total records loaded: {summary['total_records_loaded']}")
+    print(f"Inserted: {summary['inserted']}")
+    print(f"Updated: {summary['updated']}")
+    print(f"Total records processed: {summary['processed']}")
+    print(f"Total records skipped: {summary['skipped']}")
+    print(f"Total errors: {summary['errors']}")
 
 
 if __name__ == "__main__":

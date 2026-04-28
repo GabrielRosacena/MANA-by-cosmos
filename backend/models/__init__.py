@@ -209,6 +209,37 @@ class Comment(TimestampMixin, db.Model):
         }
 
 
+class PreprocessedText(TimestampMixin, db.Model):
+    __tablename__ = "preprocessed_texts"
+    __table_args__ = (db.UniqueConstraint("record_type", "raw_id", name="uq_preprocessed_record"),)
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    record_type = db.Column(db.String(32), nullable=False, index=True)
+    raw_id = db.Column(db.String(128), nullable=False, index=True)
+    raw_text = db.Column(db.Text, nullable=True)
+    clean_text = db.Column(db.Text, nullable=True)
+    tokens_json = db.Column(db.Text, nullable=False, default="[]")
+    preprocessing_status = db.Column(db.String(32), nullable=False, default="processed", index=True)
+    error_message = db.Column(db.Text, nullable=True)
+
+    @property
+    def tokens(self):
+        return json.loads(self.tokens_json or "[]")
+
+    def set_tokens(self, tokens):
+        self.tokens_json = json.dumps(tokens or [])
+
+    def to_api_dict(self):
+        return {
+            "raw_id": self.raw_id,
+            "raw_text": self.raw_text,
+            "clean_text": self.clean_text,
+            "tokens": self.tokens,
+            "preprocessing_status": self.preprocessing_status,
+            "error_message": self.error_message,
+        }
+
+
 class Watchlist(TimestampMixin, db.Model):
     __tablename__ = "watchlists"
     __table_args__ = (db.UniqueConstraint("username", "post_id", name="uq_watchlist_username_post"),)
