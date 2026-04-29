@@ -72,6 +72,8 @@ def normalize_item(item: dict):
 def import_dataset(file_path: Path):
     payload = json.loads(file_path.read_text(encoding="utf-8"))
     inserted = updated = processed = skipped = errors = 0
+    translated = translation_failed = negation_handled = lemmatized = 0
+    bigrams_detected = emotion_only_flagged = irrelevant_flagged = 0
 
     ensure_database()
     with app.app_context():
@@ -94,12 +96,21 @@ def import_dataset(file_path: Path):
             )
             db.session.add(processed_row)
             status = processed_payload["preprocessing_status"]
+            stats = processed_payload["stats"]
             if status == "processed":
                 processed += 1
             elif status == "skipped":
                 skipped += 1
             else:
                 errors += 1
+            translated += stats["translated"]
+            translation_failed += stats["translation_failed"]
+            negation_handled += stats["negation_handled"]
+            lemmatized += stats["lemmatized"]
+            bigrams_detected += stats["bigrams_detected"]
+            emotion_only_flagged += stats["emotion_only_flagged"]
+            irrelevant_flagged += stats["irrelevant_flagged"]
+            errors += stats["errors"] or (1 if status == "error" else 0)
         db.session.commit()
 
     summary = {
@@ -108,6 +119,13 @@ def import_dataset(file_path: Path):
         "updated": updated,
         "processed": processed,
         "skipped": skipped,
+        "translated": translated,
+        "translation_failed": translation_failed,
+        "negation_handled": negation_handled,
+        "lemmatized": lemmatized,
+        "bigrams_detected": bigrams_detected,
+        "emotion_only_flagged": emotion_only_flagged,
+        "irrelevant_flagged": irrelevant_flagged,
         "errors": errors,
     }
     return summary
@@ -129,6 +147,13 @@ def main():
     print(f"Updated: {summary['updated']}")
     print(f"Total records processed: {summary['processed']}")
     print(f"Total records skipped: {summary['skipped']}")
+    print(f"Translated count: {summary['translated']}")
+    print(f"Translation failed count: {summary['translation_failed']}")
+    print(f"Negation handled count: {summary['negation_handled']}")
+    print(f"Lemmatized count: {summary['lemmatized']}")
+    print(f"Bigrams detected count: {summary['bigrams_detected']}")
+    print(f"Emotion-only flagged count: {summary['emotion_only_flagged']}")
+    print(f"Irrelevant flagged count: {summary['irrelevant_flagged']}")
     print(f"Total errors: {summary['errors']}")
 
 

@@ -219,6 +219,16 @@ class PreprocessedText(TimestampMixin, db.Model):
     raw_text = db.Column(db.Text, nullable=True)
     clean_text = db.Column(db.Text, nullable=True)
     tokens_json = db.Column(db.Text, nullable=False, default="[]")
+    translated_text = db.Column(db.Text, nullable=True)
+    translation_status = db.Column(db.String(32), nullable=False, default="skipped", index=True)
+    negation_handled_tokens_json = db.Column(db.Text, nullable=False, default="[]")
+    lemmatized_tokens_json = db.Column(db.Text, nullable=False, default="[]")
+    bigrams_json = db.Column(db.Text, nullable=False, default="[]")
+    final_tokens_json = db.Column(db.Text, nullable=False, default="[]")
+    is_emotion_only = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    is_relevant = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    parent_post_id = db.Column(db.String(128), nullable=True, index=True)
+    preprocessing_stage = db.Column(db.String(32), nullable=False, default="tokenized", index=True)
     preprocessing_status = db.Column(db.String(32), nullable=False, default="processed", index=True)
     error_message = db.Column(db.Text, nullable=True)
 
@@ -229,12 +239,50 @@ class PreprocessedText(TimestampMixin, db.Model):
     def set_tokens(self, tokens):
         self.tokens_json = json.dumps(tokens or [])
 
+    @property
+    def negation_handled_tokens(self):
+        return json.loads(self.negation_handled_tokens_json or "[]")
+
+    def set_negation_handled_tokens(self, tokens):
+        self.negation_handled_tokens_json = json.dumps(tokens or [])
+
+    @property
+    def lemmatized_tokens(self):
+        return json.loads(self.lemmatized_tokens_json or "[]")
+
+    def set_lemmatized_tokens(self, tokens):
+        self.lemmatized_tokens_json = json.dumps(tokens or [])
+
+    @property
+    def bigrams(self):
+        return json.loads(self.bigrams_json or "[]")
+
+    def set_bigrams(self, bigrams):
+        self.bigrams_json = json.dumps(bigrams or [])
+
+    @property
+    def final_tokens(self):
+        return json.loads(self.final_tokens_json or "[]")
+
+    def set_final_tokens(self, tokens):
+        self.final_tokens_json = json.dumps(tokens or [])
+
     def to_api_dict(self):
         return {
             "raw_id": self.raw_id,
             "raw_text": self.raw_text,
             "clean_text": self.clean_text,
+            "translated_text": self.translated_text,
             "tokens": self.tokens,
+            "negation_handled_tokens": self.negation_handled_tokens,
+            "lemmatized_tokens": self.lemmatized_tokens,
+            "bigrams": self.bigrams,
+            "final_tokens": self.final_tokens,
+            "translation_status": self.translation_status,
+            "is_emotion_only": self.is_emotion_only,
+            "is_relevant": self.is_relevant,
+            "parent_post_id": self.parent_post_id,
+            "preprocessing_stage": self.preprocessing_stage,
             "preprocessing_status": self.preprocessing_status,
             "error_message": self.error_message,
         }

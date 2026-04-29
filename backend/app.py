@@ -87,6 +87,62 @@ def ensure_user_columns():
     conn.close()
 
 
+def ensure_preprocessed_text_columns():
+    db_path = app.instance_path + "\\mana.db"
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS preprocessed_texts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            record_type VARCHAR(32) NOT NULL,
+            raw_id VARCHAR(128) NOT NULL,
+            raw_text TEXT,
+            clean_text TEXT,
+            tokens_json TEXT NOT NULL DEFAULT '[]',
+            translated_text TEXT,
+            translation_status VARCHAR(32) NOT NULL DEFAULT 'skipped',
+            negation_handled_tokens_json TEXT NOT NULL DEFAULT '[]',
+            lemmatized_tokens_json TEXT NOT NULL DEFAULT '[]',
+            bigrams_json TEXT NOT NULL DEFAULT '[]',
+            final_tokens_json TEXT NOT NULL DEFAULT '[]',
+            is_emotion_only BOOLEAN NOT NULL DEFAULT 0,
+            is_relevant BOOLEAN NOT NULL DEFAULT 1,
+            parent_post_id VARCHAR(128),
+            preprocessing_stage VARCHAR(32) NOT NULL DEFAULT 'tokenized',
+            preprocessing_status VARCHAR(32) NOT NULL DEFAULT 'processed',
+            error_message TEXT,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    columns = {row[1] for row in cur.execute("PRAGMA table_info(preprocessed_texts)").fetchall()}
+    wanted = {
+        "translated_text": "ALTER TABLE preprocessed_texts ADD COLUMN translated_text TEXT",
+        "translation_status": "ALTER TABLE preprocessed_texts ADD COLUMN translation_status VARCHAR(32) NOT NULL DEFAULT 'skipped'",
+        "negation_handled_tokens_json": "ALTER TABLE preprocessed_texts ADD COLUMN negation_handled_tokens_json TEXT NOT NULL DEFAULT '[]'",
+        "lemmatized_tokens_json": "ALTER TABLE preprocessed_texts ADD COLUMN lemmatized_tokens_json TEXT NOT NULL DEFAULT '[]'",
+        "bigrams_json": "ALTER TABLE preprocessed_texts ADD COLUMN bigrams_json TEXT NOT NULL DEFAULT '[]'",
+        "final_tokens_json": "ALTER TABLE preprocessed_texts ADD COLUMN final_tokens_json TEXT NOT NULL DEFAULT '[]'",
+        "is_emotion_only": "ALTER TABLE preprocessed_texts ADD COLUMN is_emotion_only BOOLEAN NOT NULL DEFAULT 0",
+        "is_relevant": "ALTER TABLE preprocessed_texts ADD COLUMN is_relevant BOOLEAN NOT NULL DEFAULT 1",
+        "parent_post_id": "ALTER TABLE preprocessed_texts ADD COLUMN parent_post_id VARCHAR(128)",
+        "preprocessing_stage": "ALTER TABLE preprocessed_texts ADD COLUMN preprocessing_stage VARCHAR(32) NOT NULL DEFAULT 'tokenized'",
+    }
+    for column, statement in wanted.items():
+        if column not in columns:
+            cur.execute(statement)
+    cur.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_preprocessed_record ON preprocessed_texts(record_type, raw_id)"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS ix_preprocessed_parent_post_id ON preprocessed_texts(parent_post_id)"
+    )
+    conn.commit()
+    conn.close()
+
+
 def seed_default_users():
     if not db.session.get(User, "admin"):
         admin = User(
@@ -126,6 +182,7 @@ def ensure_database():
     with app.app_context():
         db.create_all()
         ensure_user_columns()
+        ensure_preprocessed_text_columns()
         seed_clusters()
         seed_default_users()
         seed_settings()

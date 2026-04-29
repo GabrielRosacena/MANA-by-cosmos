@@ -1,5 +1,8 @@
 """
 Text preprocessing helpers for imported Apify records.
+
+The original extraction, cleaning, and tokenization stages remain intact.
+Everything below tokenization extends the pipeline for downstream NLP models.
 """
 
 from __future__ import annotations
@@ -9,6 +12,16 @@ from html import unescape
 
 from models import PreprocessedText
 
+try:
+    from deep_translator import GoogleTranslator
+except Exception:  # pragma: no cover - optional dependency
+    GoogleTranslator = None
+
+try:
+    from nltk.stem import WordNetLemmatizer
+except Exception:  # pragma: no cover - optional dependency
+    WordNetLemmatizer = None
+
 TEXT_FIELDS = ("text", "caption", "content", "comment", "message", "postText", "body")
 URL_RE = re.compile(r"(https?://\S+|www\.\S+)", re.IGNORECASE)
 MENTION_RE = re.compile(r"(?<!\w)@([A-Za-z0-9_]+)")
@@ -16,6 +29,78 @@ HTML_TAG_RE = re.compile(r"<[^>]+>")
 HASHTAG_RE = re.compile(r"#([A-Za-z0-9_]+)")
 NON_WORD_RE = re.compile(r"[^a-z0-9\s]")
 WHITESPACE_RE = re.compile(r"\s+")
+LETTER_RE = re.compile(r"[a-zA-Z]")
+EMOJI_ONLY_RE = re.compile(r"^[\s\W_]+$", re.UNICODE)
+
+NEGATION_WORDS = {
+    "no", "not", "never", "walang", "hindi", "wala", "cannot", "cant", "can't", "dont", "don't",
+}
+NEGATION_CONNECTORS = {"na", "ng", "the", "a", "an", "very", "too", "so"}
+DISASTER_TERMS = {
+    "flood", "flooding", "flooded", "rescue", "rescues", "rescued", "evacuation", "evacuate", "evacuated",
+    "center", "centre", "shelter", "relief", "goods", "water", "road", "damage", "power", "outage",
+    "emergency", "storm", "typhoon", "landslide", "earthquake", "fire", "signal", "medical", "hospital",
+    "alert", "warning", "stranded", "trapped", "missing", "dead", "telecommunications", "logistics",
+    "wash", "nutrition", "school", "class", "suspension", "boat", "roof", "camp",
+}
+TAGALOG_HINTS = {
+    "walang", "wala", "hindi", "tulong", "saklolo", "baha", "ulan", "nasaan", "kalsada", "evacuation",
+    "nastranded", "nastranded", "rescue", "gamot", "tubig", "pagkain", "barangay", "kuryente", "putik",
+}
+EMOTION_ONLY_WORDS = {
+    "grabe", "grabi", "hala", "hay", "hays", "omg", "aww", "aw", "argh", "sad", "cry", "iyak", "wow",
+    "lol", "lmao", "help", "pls", "please", "prayers", "pray", "rip",
+}
+BIGRAM_ALLOWLIST = {
+    "flood_water",
+    "rescue_team",
+    "road_damage",
+    "power_outage",
+    "evacuation_center",
+    "relief_goods",
+    "emergency_shelter",
+    "class_suspension",
+    "signal_loss",
+    "medical_team",
+    "clean_water",
+    "food_pack",
+    "safe_space",
+    "blocked_road",
+    "rescue_boat",
+}
+STOP_WORDS = {
+    "a", "about", "after", "again", "all", "also", "am", "an", "and", "are", "as", "at", "be", "been",
+    "before", "being", "between", "both", "but", "by", "can", "did", "do", "does", "doing", "down", "during",
+    "each", "few", "for", "from", "further", "had", "has", "have", "having", "he", "her", "here", "hers",
+    "herself", "him", "himself", "his", "how", "i", "if", "in", "into", "is", "it", "its", "itself", "just",
+    "me", "more", "most", "my", "myself", "of", "on", "once", "only", "or", "other", "our", "ours",
+    "ourselves", "out", "over", "own", "same", "she", "should", "some", "such", "than", "that", "the",
+    "their", "theirs", "them", "themselves", "then", "there", "these", "they", "this", "those", "through",
+    "to", "too", "under", "until", "up", "very", "was", "we", "were", "what", "when", "where", "which",
+    "while", "who", "whom", "why", "with", "you", "your", "yours", "yourself", "yourselves", "sa", "ang",
+    "mga", "si", "ni", "ng", "na", "po", "pa", "lang", "din", "rin", "ito", "iyan", "yun", "yan", "may",
+    "meron", "naman", "kasi", "pero", "daw", "raw", "nga", "nasa", "dito", "doon",
+}
+LEMMA_OVERRIDES = {
+    "flooding": "flood",
+    "flooded": "flood",
+    "rescues": "rescue",
+    "rescued": "rescue",
+    "rescuing": "rescue",
+    "stranded": "strand",
+    "supplies": "supply",
+    "goods": "good",
+    "children": "child",
+    "people": "person",
+    "roads": "road",
+    "centers": "center",
+    "centres": "center",
+    "shelters": "shelter",
+}
+RELEVANCE_TERMS = DISASTER_TERMS | {
+    "baha", "saklolo", "tulong", "gamot", "kuryente", "lindol", "bagyo", "ulan", "landslide", "ashfall",
+    "volcano", "relief_goods", "evacuation_center", "power_outage", "road_damage", "signal_loss",
+}
 
 
 def extract_raw_text(item: dict, fallback_text: str | None = None):
@@ -46,14 +131,207 @@ def tokenize_text(cleaned_text: str):
     return [token for token in cleaned_text.split(" ") if token]
 
 
-def preprocess_record(raw_id: str, item: dict, record_type: str, fallback_text: str | None = None):
+def tokenize_preserving_apostrophes(text: str):
+    normalized = WHITESPACE_RE.sub(" ", (text or "").strip().lower())
+    return re.findall(r"[a-z]+(?:'[a-z]+)?", normalized)
+
+
+def build_location_terms(item: dict):
+    location_terms = set()
+    for key in ("location", "pageName", "page_source", "author"):
+        value = item.get(key)
+        if not isinstance(value, str):
+            continue
+        for token in tokenize_text(clean_text(value)):
+            if len(token) > 2:
+                location_terms.add(token)
+    return location_terms
+
+
+def should_translate(cleaned_text: str, tokens: list[str]):
+    if not cleaned_text or not tokens:
+        return False
+    tagalog_hits = sum(1 for token in tokens if token in TAGALOG_HINTS)
+    return tagalog_hits > 0
+
+
+def translate_text(cleaned_text: str, translator=None):
+    if not cleaned_text:
+        return "", "skipped", None
+    if translator is None:
+        if GoogleTranslator is None:
+            return cleaned_text, "skipped", "Translator dependency unavailable."
+        translator = GoogleTranslator(source="auto", target="en")
+    translated = translator.translate(cleaned_text)
+    return (translated or cleaned_text).strip(), "translated", None
+
+
+def apply_negation_handling(tokens: list[str]):
+    handled = []
+    changed = False
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token in NEGATION_WORDS:
+            j = i + 1
+            while j < len(tokens) and tokens[j] in NEGATION_CONNECTORS:
+                handled.append(tokens[j])
+                j += 1
+            if j < len(tokens):
+                handled.append(f"{token}_{tokens[j]}")
+                changed = True
+                i = j + 1
+                continue
+        handled.append(token)
+        i += 1
+    return handled, changed
+
+
+def heuristic_lemmatize(token: str):
+    if token in LEMMA_OVERRIDES:
+        return LEMMA_OVERRIDES[token]
+    if "_" in token:
+        parts = [heuristic_lemmatize(part) for part in token.split("_")]
+        return "_".join(parts)
+    if token.endswith("ies") and len(token) > 4:
+        return token[:-3] + "y"
+    if token.endswith("ing") and len(token) > 5:
+        base = token[:-3]
+        if len(base) > 2 and base[-1] == base[-2]:
+            base = base[:-1]
+        return base
+    if token.endswith("ed") and len(token) > 4:
+        base = token[:-2]
+        if base.endswith("u"):
+            return base + "e"
+        return base
+    if token.endswith("es") and len(token) > 4 and not token.endswith("ses"):
+        return token[:-2]
+    if token.endswith("s") and len(token) > 3 and not token.endswith("ss"):
+        return token[:-1]
+    return token
+
+
+def lemmatize_tokens(tokens: list[str]):
+    lemmatizer = None
+    if WordNetLemmatizer is not None:
+        try:
+            lemmatizer = WordNetLemmatizer()
+            lemmatizer.lemmatize("tests")
+        except Exception:
+            lemmatizer = None
+
+    lemmatized = []
+    changed = False
+    for token in tokens:
+        if "_" in token:
+            parts = token.split("_")
+            lemma_parts = [lemmatize_tokens([part])[0][0] for part in parts]
+            lemma = "_".join(lemma_parts)
+        elif lemmatizer is not None:
+            try:
+                lemma = lemmatizer.lemmatize(token, "v")
+                lemma = lemmatizer.lemmatize(lemma, "n")
+            except Exception:
+                lemma = heuristic_lemmatize(token)
+        else:
+            lemma = heuristic_lemmatize(token)
+        lemmatized.append(lemma)
+        changed = changed or lemma != token
+    return lemmatized, changed
+
+
+def detect_bigrams(tokens: list[str]):
+    bigrams = []
+    for left, right in zip(tokens, tokens[1:]):
+        candidate = f"{left}_{right}"
+        if candidate in BIGRAM_ALLOWLIST:
+            bigrams.append(candidate)
+    return bigrams
+
+
+def remove_stop_words(tokens: list[str], location_terms: set[str] | None = None):
+    location_terms = location_terms or set()
+    final_tokens = []
+    for token in tokens:
+        if token in NEGATION_WORDS or token in DISASTER_TERMS or token in location_terms:
+            final_tokens.append(token)
+            continue
+        if "_" in token:
+            final_tokens.append(token)
+            continue
+        if token in STOP_WORDS:
+            continue
+        final_tokens.append(token)
+    return final_tokens
+
+
+def is_emotion_only_text(raw_text: str, clean_text_value: str, tokens: list[str]):
+    raw = (raw_text or "").strip()
+    cleaned = (clean_text_value or "").strip()
+    if raw and not LETTER_RE.search(raw) and EMOJI_ONLY_RE.match(raw):
+        return True
+    if len(tokens) <= 2 and tokens and all(token in EMOTION_ONLY_WORDS for token in tokens):
+        return True
+    if len(cleaned) <= 12 and cleaned in EMOTION_ONLY_WORDS:
+        return True
+    return False
+
+
+def is_relevant_text(final_tokens: list[str], bigrams: list[str], clean_text_value: str, parent_context_text: str | None = None):
+    combined = set(final_tokens) | set(bigrams)
+    if combined & RELEVANCE_TERMS:
+        return True
+    scan_text = " ".join([clean_text_value or "", parent_context_text or ""]).strip()
+    return any(term.replace("_", " ") in scan_text for term in RELEVANCE_TERMS)
+
+
+def merge_error(existing: str | None, new_message: str | None):
+    if not new_message:
+        return existing
+    if not existing:
+        return new_message
+    if new_message in existing:
+        return existing
+    return f"{existing}; {new_message}"
+
+
+def preprocess_record(
+    raw_id: str,
+    item: dict,
+    record_type: str,
+    fallback_text: str | None = None,
+    parent_post_id: str | None = None,
+    parent_context_text: str | None = None,
+    translator=None,
+):
     result = {
         "raw_id": str(raw_id or ""),
         "raw_text": None,
         "clean_text": None,
+        "translated_text": None,
+        "translation_status": "skipped",
         "tokens": [],
+        "negation_handled_tokens": [],
+        "lemmatized_tokens": [],
+        "bigrams": [],
+        "final_tokens": [],
+        "is_emotion_only": False,
+        "is_relevant": True,
+        "parent_post_id": parent_post_id,
+        "preprocessing_stage": "tokenized",
         "preprocessing_status": "processed",
         "error_message": None,
+        "stats": {
+            "translated": 0,
+            "translation_failed": 0,
+            "negation_handled": 0,
+            "lemmatized": 0,
+            "bigrams_detected": 0,
+            "emotion_only_flagged": 0,
+            "irrelevant_flagged": 0,
+            "errors": 0,
+        },
     }
 
     try:
@@ -65,33 +343,118 @@ def preprocess_record(raw_id: str, item: dict, record_type: str, fallback_text: 
 
         cleaned = clean_text(raw_text)
         tokens = tokenize_text(cleaned)
-        if not cleaned:
-            result["preprocessing_status"] = "skipped"
-            result["raw_text"] = raw_text
-            result["clean_text"] = ""
-            result["tokens"] = []
-            result["error_message"] = "Text became empty after preprocessing."
-            return result
-
         result["raw_text"] = raw_text
         result["clean_text"] = cleaned
         result["tokens"] = tokens
+        if not cleaned:
+            is_emotion_only = record_type == "comment" and is_emotion_only_text(raw_text, cleaned, tokens)
+            result["translated_text"] = ""
+            result["is_emotion_only"] = is_emotion_only
+            result["is_relevant"] = bool(parent_post_id) if is_emotion_only else False
+            result["preprocessing_stage"] = "finalized" if is_emotion_only else "tokenized"
+            result["preprocessing_status"] = "processed" if is_emotion_only else "skipped"
+            result["error_message"] = "Text became empty after preprocessing."
+            if is_emotion_only:
+                result["stats"]["emotion_only_flagged"] = 1
+                if not result["is_relevant"]:
+                    result["stats"]["irrelevant_flagged"] = 1
+            return result
+
+        translated_text = cleaned
+        if should_translate(cleaned, tokens):
+            try:
+                translated_text, translation_status, translation_error = translate_text(cleaned, translator=translator)
+                result["translated_text"] = translated_text
+                result["translation_status"] = translation_status
+                if translation_status == "translated":
+                    result["stats"]["translated"] = 1
+                if translation_error:
+                    result["error_message"] = merge_error(result["error_message"], translation_error)
+            except Exception as exc:
+                result["translated_text"] = cleaned
+                result["translation_status"] = "error"
+                result["error_message"] = merge_error(result["error_message"], f"Translation failed: {exc}")
+                result["stats"]["translation_failed"] = 1
+        else:
+            result["translated_text"] = cleaned
+
+        translation_tokens = tokenize_preserving_apostrophes(result["translated_text"] or cleaned)
+        negation_tokens, negation_changed = apply_negation_handling(translation_tokens)
+        lemmatized_tokens, lemmatized_changed = lemmatize_tokens(negation_tokens)
+        bigrams = detect_bigrams(lemmatized_tokens)
+        location_terms = build_location_terms(item or {})
+        final_tokens = remove_stop_words(lemmatized_tokens, location_terms=location_terms)
+        for bigram in bigrams:
+            if bigram not in final_tokens:
+                final_tokens.append(bigram)
+
+        is_emotion_only = record_type == "comment" and is_emotion_only_text(raw_text, cleaned, tokens)
+        relevant = is_relevant_text(final_tokens, bigrams, cleaned, parent_context_text=parent_context_text)
+        if is_emotion_only and parent_post_id:
+            relevant = True
+
+        result["negation_handled_tokens"] = negation_tokens
+        result["lemmatized_tokens"] = lemmatized_tokens
+        result["bigrams"] = bigrams
+        result["final_tokens"] = final_tokens
+        result["is_emotion_only"] = is_emotion_only
+        result["is_relevant"] = relevant
+        result["preprocessing_stage"] = "finalized"
+
+        if negation_changed:
+            result["stats"]["negation_handled"] = 1
+        if lemmatized_changed:
+            result["stats"]["lemmatized"] = 1
+        if bigrams:
+            result["stats"]["bigrams_detected"] = len(bigrams)
+        if is_emotion_only:
+            result["stats"]["emotion_only_flagged"] = 1
+        if not relevant:
+            result["stats"]["irrelevant_flagged"] = 1
         return result
     except Exception as exc:
         result["preprocessing_status"] = "error"
-        result["error_message"] = str(exc)
+        result["preprocessing_stage"] = "error"
+        result["error_message"] = merge_error(result["error_message"], str(exc))
+        result["stats"]["errors"] = 1
         return result
 
 
-def save_preprocessed_text(item: dict, raw_id: str, record_type: str, fallback_text: str | None = None):
-    processed = preprocess_record(raw_id=raw_id, item=item, record_type=record_type, fallback_text=fallback_text)
+def save_preprocessed_text(
+    item: dict,
+    raw_id: str,
+    record_type: str,
+    fallback_text: str | None = None,
+    parent_post_id: str | None = None,
+    parent_context_text: str | None = None,
+    translator=None,
+):
+    processed = preprocess_record(
+        raw_id=raw_id,
+        item=item,
+        record_type=record_type,
+        fallback_text=fallback_text,
+        parent_post_id=parent_post_id,
+        parent_context_text=parent_context_text,
+        translator=translator,
+    )
     row = PreprocessedText.query.filter_by(record_type=record_type, raw_id=processed["raw_id"]).first()
     if not row:
         row = PreprocessedText(record_type=record_type, raw_id=processed["raw_id"])
 
     row.raw_text = processed["raw_text"]
     row.clean_text = processed["clean_text"]
+    row.translated_text = processed["translated_text"]
+    row.translation_status = processed["translation_status"]
     row.set_tokens(processed["tokens"])
+    row.set_negation_handled_tokens(processed["negation_handled_tokens"])
+    row.set_lemmatized_tokens(processed["lemmatized_tokens"])
+    row.set_bigrams(processed["bigrams"])
+    row.set_final_tokens(processed["final_tokens"])
+    row.is_emotion_only = processed["is_emotion_only"]
+    row.is_relevant = processed["is_relevant"]
+    row.parent_post_id = processed["parent_post_id"]
+    row.preprocessing_stage = processed["preprocessing_stage"]
     row.preprocessing_status = processed["preprocessing_status"]
     row.error_message = processed["error_message"]
     return row, processed
