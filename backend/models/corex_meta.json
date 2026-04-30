@@ -1,0 +1,19 @@
+{
+  "trained_at": "2026-04-30T08:03:45.883321+00:00",
+  "corpus_size": 28,
+  "n_topics": 8,
+  "anchor_strength": 3,
+  "max_features": 5000,
+  "coherence_scores": {
+    "flood": 5.182132881331335,
+    "evacuation": 6.94378362674786,
+    "rescue": 8.143469882004089,
+    "infrastructure_damage": 4.011615007992763,
+    "relief": 6.095963573480362,
+    "power_outage": 4.175848627048925,
+    "health_medical": 7.527565123418083,
+    "communication": 3.766300155043761
+  },
+  "overall_coherence": 5.730834859633397,
+  "low_coherence_topics": []
+}

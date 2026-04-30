@@ -1,0 +1,261 @@
+"""
+MANA — Full ML Pipeline Orchestration Route (admin only).
+
+Endpoints:
+  POST /api/admin/pipeline/run-all   — run all ML stages in sequence
+  GET  /api/admin/pipeline/status    — combined status of all three models
+"""
+
+from __future__ import annotations
+
+from functools import wraps
+
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt, jwt_required
+
+from models import Post, PostCluster, PostSentiment, PostTopic, PreprocessedText, db
+from services.corex.topic_modeler import (
+    get_model_status as corex_status,
+    is_model_trained as corex_trained,
+    predict_topics_batch,
+    train_corex,
+)
+from services.svm.cluster_classifier import (
+    get_model_status as svm_status,
+    is_model_trained as svm_trained,
+    predict_clusters_batch,
+    train_svm,
+)
+from services.vader.sentiment_analyzer import analyze_post, get_status as vader_status
+
+pipeline_bp = Blueprint("pipeline", __name__)
+
+
+def admin_required(fn):
+    @wraps(fn)
+    @jwt_required()
+    def wrapper(*args, **kwargs):
+        claims = get_jwt()
+        if claims.get("role") != "Admin":
+            return jsonify({"message": "Admin access required."}), 403
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+# ── Run full pipeline ──────────────────────────────────────────────────────────
+
+@pipeline_bp.route("/pipeline/run-all", methods=["POST"])
+@admin_required
+def run_all():
+    """
+    Run the full ML pipeline in order:
+      1. Check preprocessed posts exist
+      2. CorEx train  (skipped if already trained and force_retrain is false)
+      3. CorEx predict-all  → post_topics
+      4. SVM train    (skipped if already trained and force_retrain is false)
+      5. SVM predict-all    → post_clusters
+      6. VADER analyze-all  → sentiments
+
+    Optional JSON body: { "force_retrain": true }
+    """
+    body = request.get_json(silent=True) or {}
+    force = bool(body.get("force_retrain", False))
+
+    steps: dict = {}
+
+    # ── Step 1: Check preprocessed posts ──────────────────────────────────────
+    rows = (
+        PreprocessedText.query
+        .filter_by(record_type="post", preprocessing_status="processed", is_relevant=True)
+        .filter(PreprocessedText.final_tokens_json != "[]")
+        .all()
+    )
+    if not rows:
+        return jsonify({
+            "error": "No preprocessed posts found. Import and preprocess data first."
+        }), 400
+
+    post_ids = [row.raw_id for row in rows]
+    texts = [" ".join(row.final_tokens) for row in rows]
+    steps["preprocessing"] = {"posts_available": len(rows)}
+
+    # ── Step 2: CorEx train ────────────────────────────────────────────────────
+    if corex_trained() and not force:
+        meta = corex_status()
+        steps["corex_train"] = {
+            "skipped": True,
+            "reason": "Model already trained. Pass force_retrain=true to retrain.",
+            "trained_at": meta.get("trained_at"),
+            "overall_coherence": meta.get("overall_coherence"),
+        }
+    else:
+        try:
+            result = train_corex(texts)
+            steps["corex_train"] = {
+                "skipped": False,
+                "corpus_size": result["corpus_size"],
+                "trained_at": result["trained_at"],
+                "overall_coherence": result["overall_coherence"],
+                "low_coherence_topics": result["low_coherence_topics"],
+            }
+        except Exception as exc:
+            return jsonify({"error": f"CorEx training failed: {exc}", "steps": steps}), 500
+
+    # ── Step 3: CorEx predict-all ──────────────────────────────────────────────
+    try:
+        batch_topics = predict_topics_batch(texts)
+        topic_inserted = topic_skipped = 0
+        for post_id, topic_list in zip(post_ids, batch_topics):
+            if not topic_list:
+                topic_skipped += 1
+                continue
+            PostTopic.query.filter_by(post_id=post_id).delete()
+            for item in topic_list:
+                db.session.add(PostTopic(
+                    post_id=post_id,
+                    topic_label=item["topic"],
+                    confidence=item["confidence"],
+                ))
+                topic_inserted += 1
+        db.session.flush()
+        steps["corex_predict"] = {
+            "posts_processed": len(post_ids) - topic_skipped,
+            "topic_rows_inserted": topic_inserted,
+            "posts_skipped_no_topics": topic_skipped,
+        }
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"CorEx prediction failed: {exc}", "steps": steps}), 500
+
+    # ── Step 4: SVM train ──────────────────────────────────────────────────────
+    posts_map = {p.id: p for p in Post.query.filter(Post.id.in_(post_ids)).all()}
+    labels = [[posts_map[pid].cluster_id] for pid in post_ids if pid in posts_map]
+    paired_texts = [texts[i] for i, pid in enumerate(post_ids) if pid in posts_map]
+
+    if svm_trained() and not force:
+        meta = svm_status()
+        steps["svm_train"] = {
+            "skipped": True,
+            "reason": "Model already trained. Pass force_retrain=true to retrain.",
+            "trained_at": meta.get("trained_at"),
+            "f1_macro": meta.get("f1_macro"),
+        }
+    else:
+        try:
+            result = train_svm(paired_texts, labels)
+            steps["svm_train"] = {
+                "skipped": False,
+                "corpus_size": result["corpus_size"],
+                "best_C": result["best_C"],
+                "f1_macro": result["f1_macro"],
+                "trained_at": result["trained_at"],
+            }
+        except Exception as exc:
+            return jsonify({"error": f"SVM training failed: {exc}", "steps": steps}), 500
+
+    # ── Step 5: SVM predict-all ────────────────────────────────────────────────
+    try:
+        batch_clusters = predict_clusters_batch(texts)
+        cluster_inserted = cluster_skipped = cluster_updates = 0
+        for post_id, cluster_list in zip(post_ids, batch_clusters):
+            if not cluster_list:
+                cluster_skipped += 1
+                continue
+            PostCluster.query.filter_by(post_id=post_id).delete()
+            for item in cluster_list:
+                db.session.add(PostCluster(
+                    post_id=post_id,
+                    cluster_id=item["cluster_id"],
+                    confidence=item["confidence"],
+                ))
+                cluster_inserted += 1
+            top_cluster = cluster_list[0]["cluster_id"]
+            post = posts_map.get(post_id)
+            if post and post.cluster_id != top_cluster:
+                post.cluster_id = top_cluster
+                cluster_updates += 1
+        db.session.flush()
+        steps["svm_predict"] = {
+            "posts_processed": len(post_ids) - cluster_skipped,
+            "cluster_rows_inserted": cluster_inserted,
+            "post_cluster_id_updated": cluster_updates,
+            "posts_skipped_no_clusters": cluster_skipped,
+        }
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"SVM prediction failed: {exc}", "steps": steps}), 500
+
+    # ── Step 6: VADER analyze-all ──────────────────────────────────────────────
+    try:
+        clean_text_map = {
+            row.raw_id: row.clean_text
+            for row in PreprocessedText.query
+                .filter(PreprocessedText.raw_id.in_(post_ids))
+                .filter_by(record_type="post")
+                .all()
+            if row.clean_text
+        }
+        vader_inserted = vader_updated = 0
+        for post_id in post_ids:
+            post = posts_map.get(post_id)
+            if not post:
+                continue
+            text = clean_text_map.get(post_id) or post.caption or ""
+            result = analyze_post(text, post.cluster_id)
+            existing = PostSentiment.query.filter_by(post_id=post_id).first()
+            if existing:
+                existing.compound = result["compound"]
+                existing.positive = result["positive"]
+                existing.negative = result["negative"]
+                existing.neutral = result["neutral"]
+                existing.sarcasm_flag = result["sarcasm_flag"]
+                vader_updated += 1
+            else:
+                db.session.add(PostSentiment(
+                    post_id=post_id,
+                    compound=result["compound"],
+                    positive=result["positive"],
+                    negative=result["negative"],
+                    neutral=result["neutral"],
+                    sarcasm_flag=result["sarcasm_flag"],
+                ))
+                vader_inserted += 1
+            post.sentiment_score = result["sentiment_score"]
+            post.sentiment_compound = result["compound"]
+        db.session.flush()
+        steps["vader"] = {
+            "posts_processed": vader_inserted + vader_updated,
+            "sentiment_rows_inserted": vader_inserted,
+            "sentiment_rows_updated": vader_updated,
+        }
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"VADER analysis failed: {exc}", "steps": steps}), 500
+
+    # ── Commit everything at once ──────────────────────────────────────────────
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Database commit failed: {exc}", "steps": steps}), 500
+
+    return jsonify({"message": "Pipeline complete.", "steps": steps})
+
+
+# ── Combined model status ──────────────────────────────────────────────────────
+
+@pipeline_bp.route("/pipeline/status", methods=["GET"])
+@admin_required
+def status():
+    """Return training status for all three models in one call."""
+    return jsonify({
+        "corex": corex_status(),
+        "svm": svm_status(),
+        "vader": vader_status(),
+        "preprocessing": {
+            "total_posts": PreprocessedText.query.filter_by(record_type="post").count(),
+            "relevant_posts": PreprocessedText.query.filter_by(
+                record_type="post", preprocessing_status="processed", is_relevant=True
+            ).count(),
+        },
+    })

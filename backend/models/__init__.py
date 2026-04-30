@@ -129,7 +129,8 @@ class Post(TimestampMixin, db.Model):
     views = db.Column(db.Integer, nullable=False, default=0)
     media_type = db.Column(db.String(32), nullable=True)
     priority = db.Column(db.String(32), nullable=False, default="Moderate")
-    sentiment_score = db.Column(db.Integer, nullable=False, default=60)
+    sentiment_score    = db.Column(db.Integer, nullable=False, default=60)
+    sentiment_compound = db.Column(db.Float, nullable=True)
     recommendation = db.Column(db.Text, nullable=False, default="")
     status = db.Column(db.String(32), nullable=False, default="Monitoring")
     cluster_id = db.Column(db.String(32), db.ForeignKey("clusters.id"), nullable=False)
@@ -159,6 +160,7 @@ class Post(TimestampMixin, db.Model):
             "comments": self.comments,
             "priority": self.priority,
             "sentimentScore": self.sentiment_score,
+            "sentimentCompound": self.sentiment_compound,
             "recommendation": self.recommendation,
             "status": self.status,
             "clusterId": self.cluster_id,
@@ -295,3 +297,73 @@ class Watchlist(TimestampMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(80), nullable=False, index=True)
     post_id = db.Column(db.String(128), db.ForeignKey("posts.id"), nullable=False, index=True)
+
+
+class PostTopic(TimestampMixin, db.Model):
+    __tablename__ = "post_topics"
+    __table_args__ = (db.UniqueConstraint("post_id", "topic_label", name="uq_post_topic"),)
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    post_id = db.Column(db.String(128), db.ForeignKey("posts.id"), nullable=False, index=True)
+    topic_label = db.Column(db.String(64), nullable=False, index=True)
+    confidence = db.Column(db.Float, nullable=False, default=0.0)
+
+    post = db.relationship("Post")
+
+    def to_api_dict(self):
+        return {
+            "post_id": self.post_id,
+            "topic_label": self.topic_label,
+            "confidence": self.confidence,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class PostCluster(TimestampMixin, db.Model):
+    __tablename__ = "post_clusters"
+    __table_args__ = (db.UniqueConstraint("post_id", "cluster_id", name="uq_post_cluster"),)
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    post_id = db.Column(db.String(128), db.ForeignKey("posts.id"), nullable=False, index=True)
+    cluster_id = db.Column(db.String(32), db.ForeignKey("clusters.id"), nullable=False, index=True)
+    confidence = db.Column(db.Float, nullable=False, default=0.0)
+
+    post = db.relationship("Post")
+    cluster = db.relationship("Cluster")
+
+    def to_api_dict(self):
+        return {
+            "post_id": self.post_id,
+            "cluster_id": self.cluster_id,
+            "confidence": self.confidence,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class PostSentiment(TimestampMixin, db.Model):
+    """
+    VADER sentiment scores for posts. Thesis schema: sentiments table.
+    One row per post — upserted on each VADER analysis run.
+    """
+    __tablename__ = "sentiments"
+
+    id           = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    post_id      = db.Column(db.String(128), db.ForeignKey("posts.id"), nullable=False, unique=True, index=True)
+    compound     = db.Column(db.Float, nullable=False, default=0.0)
+    positive     = db.Column(db.Float, nullable=False, default=0.0)
+    negative     = db.Column(db.Float, nullable=False, default=0.0)
+    neutral      = db.Column(db.Float, nullable=False, default=1.0)
+    sarcasm_flag = db.Column(db.Boolean, nullable=False, default=False)
+
+    post = db.relationship("Post", backref=db.backref("sentiment", uselist=False))
+
+    def to_api_dict(self):
+        return {
+            "post_id":      self.post_id,
+            "compound":     self.compound,
+            "positive":     self.positive,
+            "negative":     self.negative,
+            "neutral":      self.neutral,
+            "sarcasm_flag": self.sarcasm_flag,
+            "created_at":   self.created_at.isoformat() if self.created_at else None,
+        }

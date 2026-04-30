@@ -1,0 +1,19 @@
+{
+  "trained_at": "2026-04-30T08:03:46.023982+00:00",
+  "corpus_size": 28,
+  "best_C": 0.01,
+  "cv_folds": 2,
+  "f1_macro": 1.0,
+  "max_features": 5000,
+  "target": "f1_macro >= 0.75",
+  "cluster_labels": [
+    "cluster-a",
+    "cluster-b",
+    "cluster-c",
+    "cluster-d",
+    "cluster-e",
+    "cluster-f",
+    "cluster-g",
+    "cluster-h"
+  ]
+}

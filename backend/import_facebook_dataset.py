@@ -22,8 +22,13 @@ from data import (
     extract_location,
     PRIORITY_ORDER,
 )
-from models import Post, db
+from models import Post, PostCluster, PostSentiment, PostTopic, PreprocessedText, db
 from preprocessing import save_preprocessed_text
+from services.corex.topic_modeler import is_model_trained, predict_topics_batch
+from services.svm.cluster_classifier import (
+    is_model_trained as is_svm_trained,
+    predict_clusters_batch,
+)
 
 
 def parse_iso_datetime(value: str):
@@ -113,6 +118,129 @@ def import_dataset(file_path: Path):
             errors += stats["errors"] or (1 if status == "error" else 0)
         db.session.commit()
 
+        # If CorEx model is already trained, run topic inference on newly imported posts.
+        corex_topics_assigned = 0
+        if is_model_trained():
+            new_post_ids = [
+                item.get("postId") or item.get("url") or item.get("topLevelUrl")
+                for item in payload
+            ]
+            rows = (
+                PreprocessedText.query
+                .filter(PreprocessedText.raw_id.in_([str(pid) for pid in new_post_ids if pid]))
+                .filter_by(preprocessing_status="processed", is_relevant=True)
+                .filter(PreprocessedText.final_tokens_json != "[]")
+                .all()
+            )
+            if rows:
+                texts = [" ".join(row.final_tokens) for row in rows]
+                batch_results = predict_topics_batch(texts)
+                for row, topic_list in zip(rows, batch_results):
+                    for topic_item in topic_list:
+                        existing = PostTopic.query.filter_by(
+                            post_id=row.raw_id, topic_label=topic_item["topic"]
+                        ).first()
+                        if existing:
+                            existing.confidence = topic_item["confidence"]
+                        else:
+                            db.session.add(PostTopic(
+                                post_id=row.raw_id,
+                                topic_label=topic_item["topic"],
+                                confidence=topic_item["confidence"],
+                            ))
+                        corex_topics_assigned += 1
+                db.session.commit()
+
+        # If SVM model is already trained, run cluster inference on newly imported posts.
+        svm_clusters_assigned = 0
+        if is_svm_trained():
+            new_post_ids = [
+                item.get("postId") or item.get("url") or item.get("topLevelUrl")
+                for item in payload
+            ]
+            svm_rows = (
+                PreprocessedText.query
+                .filter(PreprocessedText.raw_id.in_([str(pid) for pid in new_post_ids if pid]))
+                .filter_by(preprocessing_status="processed", is_relevant=True, record_type="post")
+                .filter(PreprocessedText.final_tokens_json != "[]")
+                .all()
+            )
+            if svm_rows:
+                svm_texts = [" ".join(row.final_tokens) for row in svm_rows]
+                svm_results = predict_clusters_batch(svm_texts)
+                for row, cluster_list in zip(svm_rows, svm_results):
+                    if not cluster_list:
+                        continue
+                    for cluster_item in cluster_list:
+                        existing = PostCluster.query.filter_by(
+                            post_id=row.raw_id, cluster_id=cluster_item["cluster_id"]
+                        ).first()
+                        if existing:
+                            existing.confidence = cluster_item["confidence"]
+                        else:
+                            db.session.add(PostCluster(
+                                post_id=row.raw_id,
+                                cluster_id=cluster_item["cluster_id"],
+                                confidence=cluster_item["confidence"],
+                            ))
+                        svm_clusters_assigned += 1
+                    # Update Post.cluster_id with top-confidence SVM prediction
+                    top_cluster = cluster_list[0]["cluster_id"]
+                    post = db.session.get(Post, row.raw_id)
+                    if post and post.cluster_id != top_cluster:
+                        post.cluster_id = top_cluster
+                db.session.commit()
+
+        # Run VADER sentiment analysis on newly imported posts.
+        vader_sentiments_assigned = 0
+        try:
+            from services.vader.sentiment_analyzer import analyze_post as _vader_analyze
+
+            new_post_ids_set = {
+                str(item.get("postId") or item.get("url") or item.get("topLevelUrl"))
+                for item in payload
+            }
+            new_posts = Post.query.filter(Post.id.in_(new_post_ids_set)).all()
+
+            pt_lookup: dict[str, str] = {
+                row.raw_id: row.clean_text
+                for row in PreprocessedText.query
+                    .filter(PreprocessedText.raw_id.in_(new_post_ids_set))
+                    .filter_by(record_type="post")
+                    .all()
+                if row.clean_text
+            }
+
+            for post in new_posts:
+                text   = pt_lookup.get(post.id) or post.caption or ""
+                result = _vader_analyze(text, post.cluster_id)
+
+                existing = PostSentiment.query.filter_by(post_id=post.id).first()
+                if existing:
+                    existing.compound     = result["compound"]
+                    existing.positive     = result["positive"]
+                    existing.negative     = result["negative"]
+                    existing.neutral      = result["neutral"]
+                    existing.sarcasm_flag = result["sarcasm_flag"]
+                else:
+                    db.session.add(PostSentiment(
+                        post_id=post.id,
+                        compound=result["compound"],
+                        positive=result["positive"],
+                        negative=result["negative"],
+                        neutral=result["neutral"],
+                        sarcasm_flag=result["sarcasm_flag"],
+                    ))
+
+                post.sentiment_score    = result["sentiment_score"]
+                post.sentiment_compound = result["compound"]
+                vader_sentiments_assigned += 1
+
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            vader_sentiments_assigned = -1
+
     summary = {
         "total_records_loaded": len(payload),
         "inserted": inserted,
@@ -127,6 +255,9 @@ def import_dataset(file_path: Path):
         "emotion_only_flagged": emotion_only_flagged,
         "irrelevant_flagged": irrelevant_flagged,
         "errors": errors,
+        "corex_topics_assigned": corex_topics_assigned,
+        "svm_clusters_assigned": svm_clusters_assigned,
+        "vader_sentiments_assigned": vader_sentiments_assigned,
     }
     return summary
 
@@ -155,6 +286,18 @@ def main():
     print(f"Emotion-only flagged count: {summary['emotion_only_flagged']}")
     print(f"Irrelevant flagged count: {summary['irrelevant_flagged']}")
     print(f"Total errors: {summary['errors']}")
+    if summary["corex_topics_assigned"]:
+        print(f"CorEx topic rows assigned: {summary['corex_topics_assigned']}")
+    else:
+        print("CorEx: model not trained — skipped topic inference (run POST /api/admin/corex/train)")
+    if summary["svm_clusters_assigned"]:
+        print(f"SVM cluster rows assigned: {summary['svm_clusters_assigned']}")
+    else:
+        print("SVM: model not trained — skipped cluster inference (run POST /api/admin/svm/train)")
+    if summary["vader_sentiments_assigned"] >= 0:
+        print(f"VADER sentiment rows assigned: {summary['vader_sentiments_assigned']}")
+    else:
+        print("VADER: sentiment analysis failed — check logs.")
 
 
 if __name__ == "__main__":

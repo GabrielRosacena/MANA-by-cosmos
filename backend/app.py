@@ -6,24 +6,33 @@ Run: python app.py  (dev)
 Install: pip install flask flask-cors flask-sqlalchemy flask-jwt-extended
 """
 
+import os
 import sqlite3
 
+from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 
+load_dotenv()
+
 from data import seed_clusters
 from models import SystemSetting, User, db
-from routes.auth  import auth_bp
-from routes.posts import posts_bp
-from routes.stats import stats_bp
-from routes.admin import admin_bp
+from routes.auth     import auth_bp
+from routes.posts    import posts_bp
+from routes.stats    import stats_bp
+from routes.admin    import admin_bp
+from routes.corex    import corex_bp
+from routes.svm      import svm_bp
+from routes.vader    import vader_bp
+from routes.pipeline import pipeline_bp
 
 app = Flask(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-app.config["JWT_SECRET_KEY"] = "CHANGE_THIS_IN_PRODUCTION_SECRET_32B"   # <- replace before deploy
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///mana.db"   # switch to PostgreSQL/MySQL in prod
+app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "CHANGE_THIS_IN_PRODUCTION_SECRET_32B")
+_db_url = os.environ.get("DATABASE_URL", "sqlite:///mana.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # ── Extensions ────────────────────────────────────────────────────────────────
@@ -32,10 +41,14 @@ JWTManager(app)
 db.init_app(app)
 
 # ── Blueprints ────────────────────────────────────────────────────────────────
-app.register_blueprint(auth_bp,  url_prefix="/api/auth")
-app.register_blueprint(posts_bp, url_prefix="/api")
-app.register_blueprint(stats_bp, url_prefix="/api")
-app.register_blueprint(admin_bp, url_prefix="/api/admin")
+app.register_blueprint(auth_bp,     url_prefix="/api/auth")
+app.register_blueprint(posts_bp,    url_prefix="/api")
+app.register_blueprint(stats_bp,    url_prefix="/api")
+app.register_blueprint(admin_bp,    url_prefix="/api/admin")
+app.register_blueprint(corex_bp,    url_prefix="/api/admin")
+app.register_blueprint(svm_bp,      url_prefix="/api/admin")
+app.register_blueprint(vader_bp,    url_prefix="/api/admin")
+app.register_blueprint(pipeline_bp, url_prefix="/api/admin")
 
 DEFAULT_SETTINGS = {
     "general": {
@@ -83,6 +96,18 @@ def ensure_user_columns():
     for column, statement in wanted.items():
         if column not in columns:
             cur.execute(statement)
+    conn.commit()
+    conn.close()
+
+
+def ensure_sentiment_columns():
+    """Add posts.sentiment_compound column if it doesn't exist (SQLite ALTER TABLE migration)."""
+    db_path = app.instance_path + "\\mana.db"
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    columns = {row[1] for row in cur.execute("PRAGMA table_info(posts)").fetchall()}
+    if "sentiment_compound" not in columns:
+        cur.execute("ALTER TABLE posts ADD COLUMN sentiment_compound REAL")
     conn.commit()
     conn.close()
 
@@ -181,8 +206,12 @@ def seed_settings():
 def ensure_database():
     with app.app_context():
         db.create_all()
-        ensure_user_columns()
-        ensure_preprocessed_text_columns()
+        if "sqlite" in _db_url:
+            # These helpers patch missing columns in an existing SQLite DB.
+            # PostgreSQL uses db.create_all() above, which handles everything.
+            ensure_user_columns()
+            ensure_preprocessed_text_columns()
+            ensure_sentiment_columns()
         seed_clusters()
         seed_default_users()
         seed_settings()

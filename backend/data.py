@@ -177,17 +177,27 @@ def infer_cluster(text: str):
     return best_cluster, keywords[:6]
 
 
-def infer_sentiment_score(text: str, engagement: int):
-    lower = (text or "").lower()
-    score = 58
-    for term, weight in DISTRESS_TERMS.items():
-        if term in lower:
-            score += weight
-    if engagement >= 100:
-        score += 8
-    if engagement >= 250:
-        score += 8
-    return max(20, min(score, 97))
+def infer_sentiment_score(text: str, engagement: int) -> int:
+    """
+    Return a distress score in range [20, 97].
+    Primary: VADER compound mapped via compound_to_score().
+    Fallback: keyword heuristic if vaderSentiment is unavailable.
+    """
+    try:
+        from services.vader.sentiment_analyzer import analyze_sentiment, compound_to_score
+        result = analyze_sentiment(text or "")
+        return compound_to_score(result["compound"])
+    except Exception:
+        lower = (text or "").lower()
+        score = 58
+        for term, weight in DISTRESS_TERMS.items():
+            if term in lower:
+                score += weight
+        if engagement >= 100:
+            score += 8
+        if engagement >= 250:
+            score += 8
+        return max(20, min(score, 97))
 
 
 def infer_priority(text: str, engagement: int):
