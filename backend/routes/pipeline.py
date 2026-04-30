@@ -21,9 +21,12 @@ from services.corex.topic_modeler import (
     train_corex,
 )
 from services.svm.cluster_classifier import (
+    DEFAULT_MIN_CONFIDENCE,
+    DEFAULT_MIN_MARGIN,
     get_model_status as svm_status,
     is_model_trained as svm_trained,
     predict_clusters_batch,
+    select_top_cluster,
     train_svm,
 )
 from services.vader.sentiment_analyzer import analyze_post, get_status as vader_status
@@ -129,8 +132,21 @@ def run_all():
 
     # ── Step 4: SVM train ──────────────────────────────────────────────────────
     posts_map = {p.id: p for p in Post.query.filter(Post.id.in_(post_ids)).all()}
-    labels = [[posts_map[pid].cluster_id] for pid in post_ids if pid in posts_map]
-    paired_texts = [texts[i] for i, pid in enumerate(post_ids) if pid in posts_map]
+    training_pairs = []
+    reviewed_count = heuristic_count = 0
+    for i, pid in enumerate(post_ids):
+        post = posts_map.get(pid)
+        if not post:
+            continue
+        label = post.reviewed_cluster_id or post.cluster_id
+        source = "reviewed" if post.reviewed_cluster_id else (post.cluster_label_source or "heuristic")
+        if source == "reviewed":
+            reviewed_count += 1
+        else:
+            heuristic_count += 1
+        training_pairs.append((texts[i], [label]))
+    paired_texts = [text for text, _label in training_pairs]
+    labels = [label for _text, label in training_pairs]
 
     if svm_trained() and not force:
         meta = svm_status()
@@ -149,6 +165,8 @@ def run_all():
                 "best_C": result["best_C"],
                 "f1_macro": result["f1_macro"],
                 "trained_at": result["trained_at"],
+                "reviewed_labels_used": reviewed_count,
+                "bootstrap_labels_used": heuristic_count,
             }
         except Exception as exc:
             return jsonify({"error": f"SVM training failed: {exc}", "steps": steps}), 500
@@ -169,10 +187,15 @@ def run_all():
                     confidence=item["confidence"],
                 ))
                 cluster_inserted += 1
-            top_cluster = cluster_list[0]["cluster_id"]
+            top_cluster = select_top_cluster(
+                cluster_list,
+                min_confidence=DEFAULT_MIN_CONFIDENCE,
+                min_margin=DEFAULT_MIN_MARGIN,
+            )
             post = posts_map.get(post_id)
-            if post and post.cluster_id != top_cluster:
-                post.cluster_id = top_cluster
+            if post and top_cluster and post.cluster_id != top_cluster["cluster_id"]:
+                post.cluster_id = top_cluster["cluster_id"]
+                post.cluster_label_source = "svm"
                 cluster_updates += 1
         db.session.flush()
         steps["svm_predict"] = {

@@ -26,8 +26,11 @@ from models import Post, PostCluster, PostSentiment, PostTopic, PreprocessedText
 from preprocessing import save_preprocessed_text
 from services.corex.topic_modeler import is_model_trained, predict_topics_batch
 from services.svm.cluster_classifier import (
+    DEFAULT_MIN_CONFIDENCE,
+    DEFAULT_MIN_MARGIN,
     is_model_trained as is_svm_trained,
     predict_clusters_batch,
+    select_top_cluster,
 )
 
 
@@ -66,6 +69,7 @@ def normalize_item(item: dict):
         "recommendation": recommendation_for(cluster["id"], priority),
         "status": "Monitoring",
         "cluster_id": cluster["id"],
+        "cluster_label_source": "heuristic",
         "date": parse_iso_datetime(item.get("time")),
         "keywords_json": json.dumps(keywords),
         "location": extract_location(text),
@@ -100,6 +104,9 @@ def import_dataset(file_path: Path):
                 fallback_text=normalized["caption"],
             )
             db.session.add(processed_row)
+            post = db.session.get(Post, normalized["id"])
+            if post:
+                post.is_relevant = processed_payload["is_relevant"]
             status = processed_payload["preprocessing_status"]
             stats = processed_payload["stats"]
             if status == "processed":
@@ -184,11 +191,16 @@ def import_dataset(file_path: Path):
                                 confidence=cluster_item["confidence"],
                             ))
                         svm_clusters_assigned += 1
-                    # Update Post.cluster_id with top-confidence SVM prediction
-                    top_cluster = cluster_list[0]["cluster_id"]
+                    # Only overwrite the visible cluster when the SVM is clearly confident.
+                    top_cluster = select_top_cluster(
+                        cluster_list,
+                        min_confidence=DEFAULT_MIN_CONFIDENCE,
+                        min_margin=DEFAULT_MIN_MARGIN,
+                    )
                     post = db.session.get(Post, row.raw_id)
-                    if post and post.cluster_id != top_cluster:
-                        post.cluster_id = top_cluster
+                    if post and top_cluster and post.cluster_id != top_cluster["cluster_id"]:
+                        post.cluster_id = top_cluster["cluster_id"]
+                        post.cluster_label_source = "svm"
                 db.session.commit()
 
         # Run VADER sentiment analysis on newly imported posts.

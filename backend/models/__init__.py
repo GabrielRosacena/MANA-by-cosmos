@@ -134,13 +134,17 @@ class Post(TimestampMixin, db.Model):
     recommendation = db.Column(db.Text, nullable=False, default="")
     status = db.Column(db.String(32), nullable=False, default="Monitoring")
     cluster_id = db.Column(db.String(32), db.ForeignKey("clusters.id"), nullable=False)
+    reviewed_cluster_id = db.Column(db.String(32), db.ForeignKey("clusters.id"), nullable=True, index=True)
+    cluster_label_source = db.Column(db.String(32), nullable=False, default="heuristic", index=True)
+    is_relevant = db.Column(db.Boolean, nullable=False, default=True, index=True)
     date = db.Column(db.DateTime, nullable=False, index=True)
     keywords_json = db.Column(db.Text, nullable=False, default="[]")
     location = db.Column(db.String(255), nullable=False, default="Philippines")
     severity_rank = db.Column(db.Integer, nullable=False, default=2)
     raw_payload_json = db.Column(db.Text, nullable=True)
 
-    cluster = db.relationship("Cluster")
+    cluster = db.relationship("Cluster", foreign_keys=[cluster_id])
+    reviewed_cluster = db.relationship("Cluster", foreign_keys=[reviewed_cluster_id])
 
     @property
     def keywords(self):
@@ -164,6 +168,9 @@ class Post(TimestampMixin, db.Model):
             "recommendation": self.recommendation,
             "status": self.status,
             "clusterId": self.cluster_id,
+            "reviewedClusterId": self.reviewed_cluster_id,
+            "clusterLabelSource": self.cluster_label_source,
+            "isRelevant": self.is_relevant,
             "date": self.date.isoformat(),
             "keywords": self.keywords,
             "location": self.location,
@@ -192,7 +199,7 @@ class Comment(TimestampMixin, db.Model):
     raw_payload_json = db.Column(db.Text, nullable=True)
 
     post = db.relationship("Post")
-    cluster = db.relationship("Cluster")
+    cluster = db.relationship("Cluster", foreign_keys=[cluster_id])
 
     def to_api_dict(self):
         return {
@@ -329,7 +336,7 @@ class PostCluster(TimestampMixin, db.Model):
     confidence = db.Column(db.Float, nullable=False, default=0.0)
 
     post = db.relationship("Post")
-    cluster = db.relationship("Cluster")
+    cluster = db.relationship("Cluster", foreign_keys=[cluster_id])
 
     def to_api_dict(self):
         return {

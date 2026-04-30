@@ -9,7 +9,12 @@ Install: pip install flask flask-cors flask-sqlalchemy flask-jwt-extended
 import os
 import sqlite3
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:
+    def load_dotenv():
+        return False
+
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -22,10 +27,32 @@ from routes.auth     import auth_bp
 from routes.posts    import posts_bp
 from routes.stats    import stats_bp
 from routes.admin    import admin_bp
-from routes.corex    import corex_bp
-from routes.svm      import svm_bp
-from routes.vader    import vader_bp
-from routes.pipeline import pipeline_bp
+
+OPTIONAL_BLUEPRINTS = []
+
+try:
+    from routes.corex import corex_bp
+    OPTIONAL_BLUEPRINTS.append((corex_bp, "/api/admin"))
+except ModuleNotFoundError:
+    corex_bp = None
+
+try:
+    from routes.svm import svm_bp
+    OPTIONAL_BLUEPRINTS.append((svm_bp, "/api/admin"))
+except ModuleNotFoundError:
+    svm_bp = None
+
+try:
+    from routes.vader import vader_bp
+    OPTIONAL_BLUEPRINTS.append((vader_bp, "/api/admin"))
+except ModuleNotFoundError:
+    vader_bp = None
+
+try:
+    from routes.pipeline import pipeline_bp
+    OPTIONAL_BLUEPRINTS.append((pipeline_bp, "/api/admin"))
+except ModuleNotFoundError:
+    pipeline_bp = None
 
 app = Flask(__name__)
 
@@ -45,10 +72,8 @@ app.register_blueprint(auth_bp,     url_prefix="/api/auth")
 app.register_blueprint(posts_bp,    url_prefix="/api")
 app.register_blueprint(stats_bp,    url_prefix="/api")
 app.register_blueprint(admin_bp,    url_prefix="/api/admin")
-app.register_blueprint(corex_bp,    url_prefix="/api/admin")
-app.register_blueprint(svm_bp,      url_prefix="/api/admin")
-app.register_blueprint(vader_bp,    url_prefix="/api/admin")
-app.register_blueprint(pipeline_bp, url_prefix="/api/admin")
+for blueprint, url_prefix in OPTIONAL_BLUEPRINTS:
+    app.register_blueprint(blueprint, url_prefix=url_prefix)
 
 DEFAULT_SETTINGS = {
     "general": {
@@ -108,6 +133,33 @@ def ensure_sentiment_columns():
     columns = {row[1] for row in cur.execute("PRAGMA table_info(posts)").fetchall()}
     if "sentiment_compound" not in columns:
         cur.execute("ALTER TABLE posts ADD COLUMN sentiment_compound REAL")
+    conn.commit()
+    conn.close()
+
+
+def ensure_post_cluster_label_columns():
+    """Add reviewed cluster tracking fields to posts for safer SVM training."""
+    db_path = app.instance_path + "\\mana.db"
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    columns = {row[1] for row in cur.execute("PRAGMA table_info(posts)").fetchall()}
+    wanted = {
+        "reviewed_cluster_id": "ALTER TABLE posts ADD COLUMN reviewed_cluster_id VARCHAR(32)",
+        "cluster_label_source": "ALTER TABLE posts ADD COLUMN cluster_label_source VARCHAR(32) NOT NULL DEFAULT 'heuristic'",
+        "is_relevant": "ALTER TABLE posts ADD COLUMN is_relevant BOOLEAN NOT NULL DEFAULT 1",
+    }
+    for column, statement in wanted.items():
+        if column not in columns:
+            cur.execute(statement)
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS ix_posts_reviewed_cluster_id ON posts(reviewed_cluster_id)"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS ix_posts_cluster_label_source ON posts(cluster_label_source)"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS ix_posts_is_relevant ON posts(is_relevant)"
+    )
     conn.commit()
     conn.close()
 
@@ -212,6 +264,7 @@ def ensure_database():
             ensure_user_columns()
             ensure_preprocessed_text_columns()
             ensure_sentiment_columns()
+            ensure_post_cluster_label_columns()
         seed_clusters()
         seed_default_users()
         seed_settings()

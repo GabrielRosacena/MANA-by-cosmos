@@ -101,6 +101,17 @@ RELEVANCE_TERMS = DISASTER_TERMS | {
     "baha", "saklolo", "tulong", "gamot", "kuryente", "lindol", "bagyo", "ulan", "landslide", "ashfall",
     "volcano", "relief_goods", "evacuation_center", "power_outage", "road_damage", "signal_loss",
 }
+STRONG_DISASTER_TERMS = {
+    "flood", "flooding", "flooded", "rescue", "rescue_team", "stranded", "trapped", "sos", "evacuation",
+    "evacuation_center", "relief_goods", "landslide", "earthquake", "typhoon", "storm", "volcano",
+    "ashfall", "power_outage", "signal_loss", "medical", "hospital", "missing", "dead", "fatality",
+    "casualty", "family tracing", "body identified", "missing person",
+}
+PUBLIC_SERVICE_MAINTENANCE_TERMS = {
+    "cleanliness", "kalinisan", "flushing", "flushing operation", "bugahan", "washdown", "road washing",
+    "cleanup", "clean up", "street cleaning", "canal cleaning", "declogging", "traffic advisory",
+    "sanitation drive", "beautification", "road clearing", "public works",
+}
 
 
 def extract_raw_text(item: dict, fallback_text: str | None = None):
@@ -280,9 +291,15 @@ def is_emotion_only_text(raw_text: str, clean_text_value: str, tokens: list[str]
 
 def is_relevant_text(final_tokens: list[str], bigrams: list[str], clean_text_value: str, parent_context_text: str | None = None):
     combined = set(final_tokens) | set(bigrams)
+    scan_text = " ".join([clean_text_value or "", parent_context_text or ""]).strip().lower()
+
+    maintenance_hits = {term for term in PUBLIC_SERVICE_MAINTENANCE_TERMS if term in scan_text}
+    strong_hits = {term for term in STRONG_DISASTER_TERMS if term in combined or term in scan_text}
+    if maintenance_hits and not strong_hits:
+        return False
+
     if combined & RELEVANCE_TERMS:
         return True
-    scan_text = " ".join([clean_text_value or "", parent_context_text or ""]).strip()
     return any(term.replace("_", " ") in scan_text for term in RELEVANCE_TERMS)
 
 

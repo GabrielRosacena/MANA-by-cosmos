@@ -53,6 +53,8 @@ CLUSTER_NAMES = {
 
 MIN_CORPUS_SIZE = 20
 MAX_FEATURES = 5000
+DEFAULT_MIN_CONFIDENCE = 0.65
+DEFAULT_MIN_MARGIN = 0.08
 
 _MODEL_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "models")
 _SVM_PATH = os.path.join(_MODEL_DIR, "svm_classifier.pkl")
@@ -240,6 +242,29 @@ def predict_clusters_batch(texts: list[str]) -> list[list[dict]]:
         all_results.append(doc_clusters)
 
     return all_results
+
+
+def select_top_cluster(
+    cluster_list: list[dict],
+    min_confidence: float = DEFAULT_MIN_CONFIDENCE,
+    min_margin: float = DEFAULT_MIN_MARGIN,
+) -> dict | None:
+    """
+    Return the top cluster only when the prediction is strong enough to trust.
+
+    This prevents low-confidence SVM outputs from overwriting the visible
+    cluster_id that the dashboard depends on.
+    """
+    if not cluster_list:
+        return None
+    ranked = sorted(cluster_list, key=lambda item: item["confidence"], reverse=True)
+    top = ranked[0]
+    if top["confidence"] < min_confidence:
+        return None
+    second_conf = ranked[1]["confidence"] if len(ranked) > 1 else 0.0
+    if (top["confidence"] - second_conf) < min_margin:
+        return None
+    return top
 
 
 # ── Status helpers ────────────────────────────────────────────────────────────

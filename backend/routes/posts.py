@@ -50,6 +50,10 @@ def apply_post_filters(query):
     cluster_id = request.args.get("cluster_id")
     priority = request.args.get("priority")
     date_range = request.args.get("date_range")
+    include_irrelevant = (request.args.get("include_irrelevant") or "").lower() in {"1", "true", "yes"}
+
+    if not include_irrelevant:
+        query = query.filter(Post.is_relevant == True)
 
     if source:
         query = query.filter(Post.source == source)
@@ -133,7 +137,7 @@ def get_clusters():
 def get_dashboard_summary():
     date_range = request.args.get("date_range", "7d")
     cutoff = now_utc() - parse_date_range(date_range)
-    posts = Post.query.filter(Post.date >= cutoff).all()
+    posts = Post.query.filter(Post.is_relevant == True, Post.date >= cutoff).all()
     total = len(posts)
     fb_posts = sum(1 for post in posts if post.source == "Facebook")
     x_posts = sum(1 for post in posts if post.source == "X")
@@ -186,7 +190,7 @@ def get_dashboard_summary():
 @posts_bp.route("/dashboard/keywords", methods=["GET"])
 @jwt_required(optional=True)
 def get_keywords():
-    posts = Post.query.order_by(Post.date.desc()).limit(500).all()
+    posts = Post.query.filter(Post.is_relevant == True).order_by(Post.date.desc()).limit(500).all()
     return jsonify({"keywords": top_keywords_from_posts(posts)})
 
 

@@ -18,7 +18,7 @@ CLUSTER_DEFINITIONS = [
         "short": "Cluster A",
         "name": "Food and Non-food Items (NFIs)",
         "description": "Tracks posts about food packs, water, hygiene kits, blankets, and other basic relief needs.",
-        "keywords": ["relief goods", "rice", "water refill", "hygiene kit", "blanket", "food pack"],
+        "keywords": ["relief goods", "rice", "water refill", "hygiene kit", "blanket", "food pack", "pagkain", "bigas", "relief pack", "drinking water"],
         "accent": "#f59e0b",
         "recommendation": "Dispatch rapid food and NFI validation support to the affected area within the next response cycle.",
     },
@@ -27,7 +27,7 @@ CLUSTER_DEFINITIONS = [
         "short": "Cluster B",
         "name": "WASH, Medical and Public Health, Nutrition, Mental Health and Psychosocial Support (Health)",
         "description": "Tracks posts about health, medicine, clean water, nutrition, and mental health support.",
-        "keywords": ["fever", "insulin", "washing area", "dehydration", "doctor", "medical team"],
+        "keywords": ["fever", "insulin", "washing area", "dehydration", "doctor", "medical team", "medicine", "gamot", "health center", "clean water", "clinic", "nurse"],
         "accent": "#3b82f6",
         "recommendation": "Coordinate a health sweep, water safety check, and medicine support with the nearest response unit.",
     },
@@ -36,7 +36,7 @@ CLUSTER_DEFINITIONS = [
         "short": "Cluster C",
         "name": "Camp Coordination, Management and Protection (CCCM)",
         "description": "Tracks evacuation center crowding, camp services, registration, and protection issues.",
-        "keywords": ["evacuation center", "overcapacity", "privacy", "registration", "safe space", "toilet line"],
+        "keywords": ["evacuation center", "overcapacity", "privacy", "registration", "safe space", "toilet line", "evacuation site", "evacuees", "shelter", "camp", "crowded"],
         "accent": "#8b5cf6",
         "recommendation": "Coordinate immediate shelter protection adjustments, sanitation checks, and overflow site support.",
     },
@@ -45,7 +45,7 @@ CLUSTER_DEFINITIONS = [
         "short": "Cluster D",
         "name": "Logistics",
         "description": "Tracks blocked routes, delivery delays, convoy movement, and supply transport issues.",
-        "keywords": ["blocked road", "convoy", "truck", "warehouse", "delivery", "reroute"],
+        "keywords": ["blocked road", "convoy", "truck", "warehouse", "delivery", "reroute", "road clearing", "bridge damage", "passable", "supply route", "transport"],
         "accent": "#f97316",
         "recommendation": "Activate alternate routing and issue a field logistics advisory before dispatch resumes.",
     },
@@ -54,7 +54,7 @@ CLUSTER_DEFINITIONS = [
         "short": "Cluster E",
         "name": "Emergency Telecommunications (ETC)",
         "description": "Tracks signal loss, network problems, and urgent communication needs.",
-        "keywords": ["signal down", "no network", "power bank", "cell site", "radio", "connectivity"],
+        "keywords": ["signal down", "no network", "power bank", "cell site", "radio", "connectivity", "no signal", "communication line", "internet down", "telecom", "network outage"],
         "accent": "#06b6d4",
         "recommendation": "Escalate emergency telecommunications support and deploy backup communications where needed.",
     },
@@ -63,7 +63,7 @@ CLUSTER_DEFINITIONS = [
         "short": "Cluster F",
         "name": "Education",
         "description": "Tracks school closures, displaced learners, and temporary learning needs.",
-        "keywords": ["school closure", "class suspension", "learning materials", "temporary classroom", "deped", "students"],
+        "keywords": ["school closure", "class suspension", "learning materials", "temporary classroom", "deped", "students", "walang pasok", "school suspension", "learners", "class cancelled"],
         "accent": "#10b981",
         "recommendation": "Coordinate temporary learning support and school recovery planning with education partners.",
     },
@@ -72,7 +72,7 @@ CLUSTER_DEFINITIONS = [
         "short": "Cluster G",
         "name": "Search, Rescue and Retrieval (SRR)",
         "description": "Tracks stranded people, rescue calls, rooftop signals, and retrieval updates.",
-        "keywords": ["stranded", "roof", "rescue boat", "trapped family", "sos", "retrieval"],
+        "keywords": ["stranded", "roof", "rescue boat", "trapped family", "sos", "retrieval", "rescue team", "saklolo", "na stranded", "trapped", "save us"],
         "accent": "#ef4444",
         "recommendation": "Push rescue coordinates to the nearest SRR team and validate extraction access immediately.",
     },
@@ -81,13 +81,39 @@ CLUSTER_DEFINITIONS = [
         "short": "Cluster H",
         "name": "Management of Dead and Missing (MDM)",
         "description": "Tracks missing persons, identification concerns, and related coordination updates.",
-        "keywords": ["missing", "identified", "hospital list", "family tracing", "coordination desk", "verification"],
+        "keywords": ["missing", "identified", "hospital list", "family tracing", "coordination desk", "verification", "missing person", "body identified", "casualty", "fatality", "unaccounted"],
         "accent": "#64748b",
         "recommendation": "Cross-check tracing, registry, and hospital intake data with missing-person coordination desks.",
     },
 ]
 
 CLUSTER_MAP = {cluster["id"]: cluster for cluster in CLUSTER_DEFINITIONS}
+CLUSTER_SIGNAL_TERMS = {
+    "cluster-a": {
+        "relief goods", "food pack", "rice", "bigas", "pagkain", "tubig", "water", "drinking water", "blanket", "hygiene kit", "relief pack",
+    },
+    "cluster-b": {
+        "doctor", "nurse", "hospital", "clinic", "medical", "medicine", "gamot", "health", "dehydration", "fever", "clean water", "sanitation",
+    },
+    "cluster-c": {
+        "evacuation center", "evacuation site", "evacuees", "shelter", "camp", "registration", "safe space", "overcapacity", "crowded",
+    },
+    "cluster-d": {
+        "blocked road", "bridge", "road", "truck", "convoy", "delivery", "reroute", "warehouse", "transport", "passable",
+    },
+    "cluster-e": {
+        "signal", "no signal", "no network", "network", "connectivity", "radio", "cell site", "internet", "telecom", "communication",
+    },
+    "cluster-f": {
+        "school", "class suspension", "school closure", "walang pasok", "deped", "students", "learners", "class cancelled", "temporary classroom",
+    },
+    "cluster-g": {
+        "rescue", "rescue team", "rescue boat", "stranded", "trapped", "saklolo", "sos", "roof", "retrieval", "save us",
+    },
+    "cluster-h": {
+        "missing", "missing person", "identified", "family tracing", "casualty", "fatality", "body identified", "hospital list", "unaccounted",
+    },
+}
 PRIORITY_ORDER = {"Monitoring": 1, "Moderate": 2, "High": 3, "Critical": 4}
 DISTRESS_TERMS = {
     "urgent": 8,
@@ -151,12 +177,20 @@ def infer_cluster(text: str):
     matched_keywords = []
 
     for cluster in CLUSTER_DEFINITIONS:
-        matches = [keyword for keyword in cluster["keywords"] if keyword.lower() in lower]
-        score = len(matches)
+        exact_matches = [keyword for keyword in cluster["keywords"] if keyword.lower() in lower]
+        signal_matches = [term for term in CLUSTER_SIGNAL_TERMS.get(cluster["id"], set()) if term in lower]
+        weighted_score = (len(exact_matches) * 3) + len(signal_matches)
+        if any(term in lower for term in ["sos", "saklolo", "rescue", "trapped", "stranded"]) and cluster["id"] == "cluster-g":
+            weighted_score += 4
+        if any(term in lower for term in ["evacuation center", "evacuees", "shelter"]) and cluster["id"] == "cluster-c":
+            weighted_score += 3
+        if any(term in lower for term in ["missing", "fatality", "body identified"]) and cluster["id"] == "cluster-h":
+            weighted_score += 4
+        score = weighted_score
         if score > best_score:
             best_cluster = cluster
             best_score = score
-            matched_keywords = matches
+            matched_keywords = exact_matches or signal_matches
 
     if best_score <= 0:
         fallback_map = [
@@ -166,6 +200,10 @@ def infer_cluster(text: str):
             ("volcano", "cluster-g"),
             ("ash", "cluster-g"),
             ("evacuation", "cluster-c"),
+            ("relief", "cluster-a"),
+            ("medicine", "cluster-b"),
+            ("school", "cluster-f"),
+            ("signal", "cluster-e"),
         ]
         for trigger, cluster_id in fallback_map:
             if trigger in lower:

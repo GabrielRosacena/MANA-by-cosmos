@@ -17,9 +17,12 @@ from flask_jwt_extended import get_jwt, jwt_required
 
 from models import Post, PostCluster, PreprocessedText, db
 from services.svm.cluster_classifier import (
+    DEFAULT_MIN_CONFIDENCE,
+    DEFAULT_MIN_MARGIN,
     get_model_status,
     is_model_trained,
     predict_clusters_batch,
+    select_top_cluster,
     train_svm,
 )
 
@@ -44,9 +47,12 @@ def admin_required(fn):
 def train():
     """
     Join PreprocessedText with Post to get (text, cluster_label) pairs, then
-    train the LinearSVC OvR classifier. Post.cluster_id provides the training
-    labels (bootstrapped from the keyword heuristic in data.py).
+    train the LinearSVC OvR classifier. By default this uses reviewed labels
+    only; heuristic/bootstrap labels can be explicitly included for fallback.
     """
+    body = request.get_json(silent=True) or {}
+    include_bootstrap = bool(body.get("include_bootstrap", False))
+
     rows = (
         db.session.query(PreprocessedText, Post)
         .join(Post, PreprocessedText.raw_id == Post.id)
@@ -62,9 +68,29 @@ def train():
     if not rows:
         return jsonify({"error": "No preprocessed posts found. Import data first."}), 400
 
-    texts = [" ".join(pt.final_tokens) for pt, post in rows]
-    # Wrap single cluster_id in a list for MultiLabelBinarizer compatibility
-    labels = [[post.cluster_id] for pt, post in rows]
+    training_pairs = []
+    reviewed_count = heuristic_count = 0
+    for pt, post in rows:
+        label = post.reviewed_cluster_id
+        source = "reviewed"
+        if not label and include_bootstrap:
+            label = post.cluster_id
+            source = post.cluster_label_source or "heuristic"
+        if not label:
+            continue
+        if source == "reviewed":
+            reviewed_count += 1
+        else:
+            heuristic_count += 1
+        training_pairs.append((" ".join(pt.final_tokens), [label]))
+
+    if not training_pairs:
+        return jsonify({
+            "error": "No reviewed cluster labels found. Review posts first or pass include_bootstrap=true to train from heuristic labels.",
+        }), 400
+
+    texts = [text for text, _label in training_pairs]
+    labels = [label for _text, label in training_pairs]
 
     try:
         result = train_svm(texts, labels)
@@ -79,6 +105,8 @@ def train():
         "best_C": result["best_C"],
         "f1_macro": result["f1_macro"],
         "trained_at": result["trained_at"],
+        "reviewed_labels_used": reviewed_count,
+        "bootstrap_labels_used": heuristic_count,
         "per_class_report": result["per_class_report"],
     })
 
@@ -109,6 +137,8 @@ def predict_all():
 
     body = request.get_json(silent=True) or {}
     overwrite = bool(body.get("overwrite", False))
+    min_confidence = float(body.get("min_confidence", DEFAULT_MIN_CONFIDENCE))
+    min_margin = float(body.get("min_margin", DEFAULT_MIN_MARGIN))
 
     rows = (
         PreprocessedText.query
@@ -159,11 +189,15 @@ def predict_all():
                 ))
             inserted += 1
 
-        # Update Post.cluster_id with the SVM's top-confidence cluster
-        top_cluster = cluster_list[0]["cluster_id"]
+        top_prediction = select_top_cluster(
+            cluster_list,
+            min_confidence=min_confidence,
+            min_margin=min_margin,
+        )
         post = db.session.get(Post, post_id)
-        if post and post.cluster_id != top_cluster:
-            post.cluster_id = top_cluster
+        if post and top_prediction and post.cluster_id != top_prediction["cluster_id"]:
+            post.cluster_id = top_prediction["cluster_id"]
+            post.cluster_label_source = "svm"
             cluster_updates += 1
 
     try:
@@ -178,6 +212,8 @@ def predict_all():
         "cluster_rows_inserted": inserted,
         "post_cluster_id_updated": cluster_updates,
         "posts_skipped_no_clusters": skipped,
+        "min_confidence": min_confidence,
+        "min_margin": min_margin,
     })
 
 
