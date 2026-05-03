@@ -13,7 +13,8 @@ from functools import wraps
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, jwt_required
 
-from models import Post, PostCluster, PostSentiment, PostTopic, PreprocessedText, db
+from data import recommendation_for
+from models import Post, PostCluster, PostPriority, PostSentiment, PostTopic, PreprocessedText, db
 from services.corex.topic_modeler import (
     get_model_status as corex_status,
     is_model_trained as corex_trained,
@@ -30,6 +31,16 @@ from services.svm.cluster_classifier import (
     train_svm,
 )
 from services.vader.sentiment_analyzer import analyze_post, get_status as vader_status
+from services.random_forest.priority_classifier import (
+    SEVERITY_MAP,
+    get_model_status as rf_status,
+    is_model_trained as rf_trained,
+    predict_priorities_batch,
+    train_rf,
+)
+
+# Map RF labels to the priority string recommendation_for() acts on
+_RF_TO_REC_PRIORITY = {"High": "Critical", "Medium": "Moderate", "Low": "Monitoring"}
 
 pipeline_bp = Blueprint("pipeline", __name__)
 
@@ -255,6 +266,73 @@ def run_all():
         db.session.rollback()
         return jsonify({"error": f"VADER analysis failed: {exc}", "steps": steps}), 500
 
+    # ── Step 7: RF train ───────────────────────────────────────────────────────
+    if rf_trained() and not force:
+        meta = rf_status()
+        steps["rf_train"] = {
+            "skipped":    True,
+            "reason":     "Model already trained. Pass force_retrain=true to retrain.",
+            "trained_at": meta.get("trained_at"),
+            "accuracy":   meta.get("accuracy"),
+        }
+    else:
+        try:
+            result = train_rf(post_ids)
+            steps["rf_train"] = {
+                "skipped":            False,
+                "corpus_size":        result["corpus_size"],
+                "accuracy":           result["accuracy"],
+                "trained_at":         result["trained_at"],
+                "class_distribution": result["class_distribution"],
+            }
+        except Exception as exc:
+            return jsonify({"error": f"RF training failed: {exc}", "steps": steps}), 500
+
+    # ── Step 8: RF predict-all ─────────────────────────────────────────────────
+    try:
+        rf_predictions = predict_priorities_batch(post_ids)
+        rf_inserted = rf_updated = 0
+        for pred in rf_predictions:
+            pid   = pred["post_id"]
+            label = pred["priority"]
+            conf  = pred["confidence"]
+            probs = pred["probabilities"]
+            post  = posts_map.get(pid)
+            if not post:
+                continue
+            post.priority      = label
+            post.severity_rank = SEVERITY_MAP.get(label, 2)
+            post.recommendation = recommendation_for(
+                post.cluster_id, _RF_TO_REC_PRIORITY.get(label, "Moderate")
+            )
+            existing = PostPriority.query.filter_by(post_id=pid).first()
+            if existing:
+                existing.priority_label     = label
+                existing.confidence         = conf
+                existing.high_probability   = probs.get("High",   0.0)
+                existing.medium_probability = probs.get("Medium", 0.0)
+                existing.low_probability    = probs.get("Low",    0.0)
+                rf_updated += 1
+            else:
+                db.session.add(PostPriority(
+                    post_id=pid,
+                    priority_label=label,
+                    confidence=conf,
+                    high_probability=probs.get("High",   0.0),
+                    medium_probability=probs.get("Medium", 0.0),
+                    low_probability=probs.get("Low",    0.0),
+                ))
+                rf_inserted += 1
+        db.session.flush()
+        steps["rf_predict"] = {
+            "posts_processed":        len(rf_predictions),
+            "priority_rows_inserted": rf_inserted,
+            "priority_rows_updated":  rf_updated,
+        }
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"RF prediction failed: {exc}", "steps": steps}), 500
+
     # ── Commit everything at once ──────────────────────────────────────────────
     try:
         db.session.commit()
@@ -275,6 +353,7 @@ def status():
         "corex": corex_status(),
         "svm": svm_status(),
         "vader": vader_status(),
+        "rf": rf_status(),
         "preprocessing": {
             "total_posts": PreprocessedText.query.filter_by(record_type="post").count(),
             "relevant_posts": PreprocessedText.query.filter_by(

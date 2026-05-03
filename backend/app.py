@@ -54,6 +54,12 @@ try:
 except ModuleNotFoundError:
     pipeline_bp = None
 
+try:
+    from routes.random_forest import rf_bp
+    OPTIONAL_BLUEPRINTS.append((rf_bp, "/api/admin"))
+except ModuleNotFoundError:
+    rf_bp = None
+
 app = Flask(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -255,6 +261,35 @@ def seed_settings():
     db.session.commit()
 
 
+def ensure_post_priority_table():
+    """Create post_priorities table for RF predictions if it does not yet exist."""
+    db_path = app.instance_path + "\\mana.db"
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS post_priorities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            post_id VARCHAR(128) NOT NULL UNIQUE,
+            priority_label VARCHAR(32) NOT NULL,
+            confidence REAL NOT NULL DEFAULT 0.0,
+            high_probability REAL NOT NULL DEFAULT 0.0,
+            medium_probability REAL NOT NULL DEFAULT 0.0,
+            low_probability REAL NOT NULL DEFAULT 0.0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (post_id) REFERENCES posts(id)
+        )
+        """
+    )
+    cur.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS "
+        "ix_post_priorities_post_id ON post_priorities(post_id)"
+    )
+    conn.commit()
+    conn.close()
+
+
 def ensure_database():
     with app.app_context():
         db.create_all()
@@ -265,6 +300,7 @@ def ensure_database():
             ensure_preprocessed_text_columns()
             ensure_sentiment_columns()
             ensure_post_cluster_label_columns()
+            ensure_post_priority_table()
         seed_clusters()
         seed_default_users()
         seed_settings()

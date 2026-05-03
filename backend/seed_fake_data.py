@@ -7,15 +7,17 @@ Usage:
     python seed_fake_data.py
 
 What it does:
-1. Creates 50 fake social media posts (English + Tagalog + Taglish) covering all 8 NDRRMC clusters
-2. Inserts them through normalize_item() (same path as real Apify imports)
-3. Runs text preprocessing on every post
-4. Trains CorEx topic model on the preprocessed corpus
-5. Runs CorEx topic inference → writes to post_topics
-6. Trains SVM cluster classifier on the labeled corpus
-7. Runs SVM cluster inference → writes to post_clusters
-8. Runs VADER sentiment analysis → writes to sentiments
-9. Prints a stage-by-stage summary with pass/fail indicators
+1.  Creates 50 fake social media posts (English + Tagalog + Taglish) covering all 8 NDRRMC clusters
+2.  Inserts them through normalize_item() (same path as real Apify imports)
+3.  Runs text preprocessing on every post
+4.  Trains CorEx topic model on the preprocessed corpus
+5.  Runs CorEx topic inference → writes to post_topics
+6.  Trains SVM cluster classifier on the labeled corpus
+7.  Runs SVM cluster inference → writes to post_clusters
+8.  Runs VADER sentiment analysis → writes to sentiments
+9.  Trains Random Forest priority classifier (uses Post.priority as bootstrap labels)
+10. Runs RF priority inference → writes to post_priorities, updates Post.priority
+11. Prints a stage-by-stage summary with pass/fail indicators
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ from data import (
     media_type_for,
     recommendation_for,
 )
-from models import Post, PostCluster, PostSentiment, PostTopic, PreprocessedText, db
+from models import Post, PostCluster, PostPriority, PostSentiment, PostTopic, PreprocessedText, db
 from preprocessing import save_preprocessed_text
 from services.corex.topic_modeler import (
     is_model_trained as corex_trained,
@@ -52,6 +54,11 @@ from services.svm.cluster_classifier import (
     train_svm,
 )
 from services.vader.sentiment_analyzer import analyze_post
+from services.random_forest.priority_classifier import (
+    SEVERITY_MAP,
+    predict_priorities_batch,
+    train_rf,
+)
 
 # ── Fake dataset — 50 posts across 8 NDRRMC clusters ─────────────────────────
 # Format matches Apify Facebook Posts Scraper output so normalize_item() works as-is.
@@ -645,6 +652,61 @@ def run_vader() -> dict:
     return {"inserted": inserted, "updated": updated}
 
 
+def run_rf() -> dict:
+    from data import recommendation_for
+
+    _RF_TO_REC_PRIORITY = {"High": "Critical", "Medium": "Moderate", "Low": "Monitoring"}
+
+    result = train_rf()
+
+    rows = (
+        PreprocessedText.query
+        .filter_by(record_type="post", preprocessing_status="processed", is_relevant=True)
+        .filter(PreprocessedText.final_tokens_json != "[]")
+        .all()
+    )
+    post_ids = [r.raw_id for r in rows]
+    predictions = predict_priorities_batch(post_ids)
+    posts_map = {p.id: p for p in Post.query.filter(Post.id.in_(post_ids)).all()}
+
+    inserted = updated = 0
+    for pred in predictions:
+        pid   = pred["post_id"]
+        label = pred["priority"]
+        conf  = pred["confidence"]
+        probs = pred["probabilities"]
+        post  = posts_map.get(pid)
+        if not post:
+            continue
+        post.priority      = label
+        post.severity_rank = SEVERITY_MAP.get(label, 2)
+        post.recommendation = recommendation_for(
+            post.cluster_id, _RF_TO_REC_PRIORITY.get(label, "Moderate")
+        )
+        existing = PostPriority.query.filter_by(post_id=pid).first()
+        if existing:
+            existing.priority_label     = label
+            existing.confidence         = conf
+            existing.high_probability   = probs.get("High",   0.0)
+            existing.medium_probability = probs.get("Medium", 0.0)
+            existing.low_probability    = probs.get("Low",    0.0)
+            updated += 1
+        else:
+            db.session.add(PostPriority(
+                post_id=pid,
+                priority_label=label,
+                confidence=conf,
+                high_probability=probs.get("High",   0.0),
+                medium_probability=probs.get("Medium", 0.0),
+                low_probability=probs.get("Low",    0.0),
+            ))
+            inserted += 1
+    db.session.commit()
+
+    dist = {lbl: sum(1 for p in predictions if p["priority"] == lbl) for lbl in ["High", "Medium", "Low"]}
+    return {**result, "priority_rows": inserted + updated, "distribution": dist}
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -695,6 +757,25 @@ def main():
         except Exception as exc:
             _step("VADER failed", False, str(exc))
 
+        # ── Stage 5: Random Forest ────────────────────────────────────────────
+        print("\nStage 5 — Random Forest Priority Classification")
+        try:
+            rf_r = run_rf()
+            _step("Model trained", True,
+                  f"corpus={rf_r['corpus_size']}, accuracy={rf_r['accuracy']:.3f}")
+            _step("Priorities predicted", rf_r["priority_rows"] > 0,
+                  f"{rf_r['priority_rows']} rows written")
+            dist = rf_r["distribution"]
+            _step("Class distribution", True,
+                  f"High={dist.get('High',0)}  Medium={dist.get('Medium',0)}  Low={dist.get('Low',0)}")
+            high_posts = Post.query.filter_by(priority="High").count()
+            _step("Post.priority updated", high_posts > 0,
+                  f"{Post.query.filter_by(priority='High').count()} High, "
+                  f"{Post.query.filter_by(priority='Medium').count()} Medium, "
+                  f"{Post.query.filter_by(priority='Low').count()} Low")
+        except Exception as exc:
+            _step("RF failed", False, str(exc))
+
         # ── Summary ───────────────────────────────────────────────────────────
         print("\n=== DB Row Counts ===")
         print(f"  posts              : {Post.query.count()}")
@@ -702,6 +783,7 @@ def main():
         print(f"  post_topics        : {PostTopic.query.count()}")
         print(f"  post_clusters      : {PostCluster.query.count()}")
         print(f"  sentiments         : {PostSentiment.query.count()}")
+        print(f"  post_priorities    : {PostPriority.query.count()}")
         print()
 
 

@@ -374,3 +374,33 @@ class PostSentiment(TimestampMixin, db.Model):
             "sarcasm_flag": self.sarcasm_flag,
             "created_at":   self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class PostPriority(TimestampMixin, db.Model):
+    """
+    Random Forest priority predictions. Thesis schema: post_priorities table.
+    One row per post — upserted on each RF predict-all run.
+    Stores label, confidence, and per-class probabilities (High / Medium / Low).
+    """
+    __tablename__ = "post_priorities"
+
+    id                 = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    post_id            = db.Column(db.String(128), db.ForeignKey("posts.id"), nullable=False, unique=True, index=True)
+    priority_label     = db.Column(db.String(32), nullable=False)
+    confidence         = db.Column(db.Float, nullable=False, default=0.0)
+    high_probability   = db.Column(db.Float, nullable=False, default=0.0)
+    medium_probability = db.Column(db.Float, nullable=False, default=0.0)
+    low_probability    = db.Column(db.Float, nullable=False, default=0.0)
+
+    post = db.relationship("Post", backref=db.backref("rf_priority", uselist=False))
+
+    def to_api_dict(self):
+        return {
+            "post_id":            self.post_id,
+            "priority_label":     self.priority_label,
+            "confidence":         self.confidence,
+            "high_probability":   self.high_probability,
+            "medium_probability": self.medium_probability,
+            "low_probability":    self.low_probability,
+            "created_at":         self.created_at.isoformat() if self.created_at else None,
+        }

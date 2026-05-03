@@ -1,9 +1,9 @@
 {
-  "trained_at": "2026-04-30T08:03:46.023982+00:00",
-  "corpus_size": 28,
+  "trained_at": "2026-05-02T01:26:50.257101+00:00",
+  "corpus_size": 65,
   "best_C": 0.01,
-  "cv_folds": 2,
-  "f1_macro": 1.0,
+  "cv_folds": 4,
+  "f1_macro": 0.6071,
   "max_features": 5000,
   "target": "f1_macro >= 0.75",
   "cluster_labels": [
