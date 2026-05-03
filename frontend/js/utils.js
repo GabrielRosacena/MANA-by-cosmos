@@ -74,11 +74,10 @@ function applyStatusStyle(select, status) {
 }
 
 function applySeverityStyle(select, severity) {
-  select.classList.remove("severity-critical","severity-high","severity-medium","severity-low");
-  if (severity === "Critical") select.classList.add("severity-critical");
-  if (severity === "High")     select.classList.add("severity-high");
-  if (severity === "Medium")   select.classList.add("severity-medium");
-  if (severity === "Low")      select.classList.add("severity-low");
+  select.classList.remove("severity-high","severity-medium","severity-low");
+  if (severity === "High")   select.classList.add("severity-high");
+  if (severity === "Medium") select.classList.add("severity-medium");
+  if (severity === "Low")    select.classList.add("severity-low");
 }
 
 // ─── Toast Notifications ──────────────────────────────────────────────────────

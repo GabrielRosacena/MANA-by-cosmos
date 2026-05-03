@@ -208,7 +208,7 @@ function renderWatchlist() {
 // ─── Render: Alerts ───────────────────────────────────────────────────────────
 function renderAlerts() {
   const filtered = filterPosts(state.posts, state.alerts.dateRange, state.alerts.source)
-    .filter(p => p.priority === "Critical" || p.priority === "High")
+    .filter(p => p.priority === "High")
     .sort(sortPostsByPriority);
 
   const grouped = state.clusters.map(cluster => {
@@ -248,9 +248,8 @@ function renderClusterDetail() {
   document.getElementById("clusterPageTitle").textContent = `${cluster.short}: ${cluster.name}`;
   document.getElementById("clusterPageLead").textContent  = "Cluster page with filters, key metrics, and related posts.";
 
-  const clusterPosts  = state.posts.filter(p => p.clusterId === cluster.id);
-  const criticalCount = clusterPosts.filter(p => p.priority === "Critical").length;
-  const highCount     = clusterPosts.filter(p => p.priority === "High").length;
+  const clusterPosts = state.posts.filter(p => p.clusterId === cluster.id);
+  const highCount    = clusterPosts.filter(p => p.priority === "High").length;
 
   document.getElementById("clusterHero").innerHTML = `
     <div class="cluster-title-row">
@@ -263,18 +262,16 @@ function renderClusterDetail() {
       </div>
     </div>
     <div class="cluster-metrics">
-      <div class="mini-card kpi-blue"><div class="mini-card-label">Total posts in cluster</div><div class="mini-card-value">${formatNumber(clusterPosts.length)}</div><div class="mini-card-meta">Posts shown in this demo</div></div>
-      <div class="mini-card kpi-red"><div class="mini-card-label">Critical posts count</div><div class="mini-card-value">${formatNumber(criticalCount)}</div><div class="mini-card-meta">Posts that need fastest response</div></div>
+      <div class="mini-card kpi-blue"><div class="mini-card-label">Total posts in cluster</div><div class="mini-card-value">${formatNumber(clusterPosts.length)}</div><div class="mini-card-meta">Posts shown in this cluster</div></div>
       <div class="mini-card kpi-gold"><div class="mini-card-label">High priority posts count</div><div class="mini-card-value">${formatNumber(highCount)}</div><div class="mini-card-meta">Posts that need close attention</div></div>
     </div>`;
 
   const f = state.clusterFilters;
   const filteredPosts = filterPosts(clusterPosts, f.dateRange, f.source)
     .filter(p => {
-      if (f.severity === "Critical") return p.priority === "Critical";
-      if (f.severity === "High")     return p.priority === "High";
-      if (f.severity === "Medium")   return p.priority === "Moderate";
-      if (f.severity === "Low")      return p.priority === "Monitoring";
+      if (f.severity === "High")   return p.priority === "High";
+      if (f.severity === "Medium") return p.priority === "Moderate";
+      if (f.severity === "Low")    return p.priority === "Monitoring";
       return true;
     })
     .sort((a, b) => f.severity === "Trending" ? getEngagement(b) - getEngagement(a) : sortPostsByPriority(a, b));

@@ -1995,6 +1995,24 @@ body.light-theme .status-select.status-unresolved {
   color: #caf6dc !important;
 }
 
+body.light-theme .severity-high {
+  border-color: rgba(217, 119, 6, 0.5) !important;
+  background: rgba(245, 158, 11, 0.12) !important;
+  color: #92400e !important;
+}
+
+body.light-theme .severity-medium {
+  border-color: rgba(14, 165, 233, 0.5) !important;
+  background: rgba(56, 189, 248, 0.12) !important;
+  color: #0369a1 !important;
+}
+
+body.light-theme .severity-low {
+  border-color: rgba(5, 150, 105, 0.5) !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #065f46 !important;
+}
+
 .settings-card.compact-card {
   align-content: start;
   min-height: 0;

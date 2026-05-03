@@ -16,19 +16,19 @@ const MOCK_ANALYTICS = {
     histogram:       [{ label:"0-20",  value:26,  tone:"negative" },{ label:"21-40", value:48,  tone:"negative" },{ label:"41-60", value:72,  tone:"neutral"  },{ label:"61-80", value:61,  tone:"positive" },{ label:"81-100",value:33,  tone:"positive" }],
     trend:           { labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], positive:[18,20,19,24,26,28,30], neutral:[34,31,36,33,37,35,39], negative:[22,26,29,35,41,47,53] },
     clusterActivity: [{ label:"Food and NFIs",value:120,color:"#f59e0b" },{ label:"Health",    value:85, color:"#3b82f6" },{ label:"CCCM",     value:64, color:"#8b5cf6" },{ label:"Logistics",value:74, color:"#f97316" },{ label:"ETC",      value:42, color:"#06b6d4" },{ label:"Education",value:33, color:"#10b981" },{ label:"SRR",      value:96, color:"#ef4444" },{ label:"MDM",      value:28, color:"#64748b" }],
-    priority:        [{ label:"Low",value:44,color:"#34d399" },{ label:"Medium",value:71,color:"#38bdf8" },{ label:"High",value:94,color:"#f59e0b" },{ label:"Critical",value:58,color:"#fb7185" }],
+    priority:        [{ label:"Low",value:44,color:"#34d399" },{ label:"Medium",value:71,color:"#38bdf8" },{ label:"High",value:94,color:"#f59e0b" }],
   },
   "14d": {
     histogram:       [{ label:"0-20",  value:52,  tone:"negative" },{ label:"21-40", value:96,  tone:"negative" },{ label:"41-60", value:128, tone:"neutral"  },{ label:"61-80", value:116, tone:"positive" },{ label:"81-100",value:68,  tone:"positive" }],
     trend:           { labels:["W1","W2","W3","W4","W5","W6","W7"], positive:[28,30,29,34,38,40,43], neutral:[49,52,50,54,56,58,61], negative:[34,39,43,52,61,70,78] },
     clusterActivity: [{ label:"Food and NFIs",value:226,color:"#f59e0b" },{ label:"Health",    value:181,color:"#3b82f6" },{ label:"CCCM",     value:128,color:"#8b5cf6" },{ label:"Logistics",value:149,color:"#f97316" },{ label:"ETC",      value:86, color:"#06b6d4" },{ label:"Education",value:67, color:"#10b981" },{ label:"SRR",      value:194,color:"#ef4444" },{ label:"MDM",      value:54, color:"#64748b" }],
-    priority:        [{ label:"Low",value:88,color:"#34d399" },{ label:"Medium",value:132,color:"#38bdf8" },{ label:"High",value:188,color:"#f59e0b" },{ label:"Critical",value:112,color:"#fb7185" }],
+    priority:        [{ label:"Low",value:88,color:"#34d399" },{ label:"Medium",value:132,color:"#38bdf8" },{ label:"High",value:188,color:"#f59e0b" }],
   },
   "30d": {
     histogram:       [{ label:"0-20",  value:110, tone:"negative" },{ label:"21-40", value:184, tone:"negative" },{ label:"41-60", value:248, tone:"neutral"  },{ label:"61-80", value:222, tone:"positive" },{ label:"81-100",value:144, tone:"positive" }],
     trend:           { labels:["P1","P2","P3","P4","P5","P6","P7"], positive:[51,48,52,56,61,67,72], neutral:[82,86,84,90,94,101,110], negative:[60,69,78,88,103,118,132] },
     clusterActivity: [{ label:"Food and NFIs",value:428,color:"#f59e0b" },{ label:"Health",    value:355,color:"#3b82f6" },{ label:"CCCM",     value:246,color:"#8b5cf6" },{ label:"Logistics",value:271,color:"#f97316" },{ label:"ETC",      value:163,color:"#06b6d4" },{ label:"Education",value:122,color:"#10b981" },{ label:"SRR",      value:377,color:"#ef4444" },{ label:"MDM",      value:107,color:"#64748b" }],
-    priority:        [{ label:"Low",value:170,color:"#34d399" },{ label:"Medium",value:261,color:"#38bdf8" },{ label:"High",value:336,color:"#f59e0b" },{ label:"Critical",value:212,color:"#fb7185" }],
+    priority:        [{ label:"Low",value:170,color:"#34d399" },{ label:"Medium",value:261,color:"#38bdf8" },{ label:"High",value:336,color:"#f59e0b" }],
   },
 };
 
