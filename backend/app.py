@@ -60,6 +60,12 @@ try:
 except ModuleNotFoundError:
     rf_bp = None
 
+try:
+    from routes.rules import rules_bp
+    OPTIONAL_BLUEPRINTS.append((rules_bp, "/api/admin"))
+except ModuleNotFoundError:
+    rules_bp = None
+
 app = Flask(__name__)
 
 # ── Config ────────────────────────────────────────────────────────────────────
