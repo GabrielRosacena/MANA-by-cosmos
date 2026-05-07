@@ -12,11 +12,7 @@
 const SUPABASE_URL = "https://gizuoookwwkximbqvcpx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_cj0YjBeAVubMaZVOyYXNyQ_D0en0BF_";
 
-// On Render, update the production URL below to match your deployed backend service name.
-const _isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
-const API_BASE = _isLocal
-  ? "http://localhost:5000/api"
-  : "https://mana-backend-4s1w.onrender.com/api";
+const API_BASE = "https://mana-backend-4s1w.onrender.com/api";
 const USE_MOCK = false;
 
 // ─── JWT Helpers ──────────────────────────────────────────────────────────────
