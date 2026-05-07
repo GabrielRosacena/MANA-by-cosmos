@@ -23,14 +23,6 @@ services:
       - key: APIFY_WEBHOOK_SECRET
         sync: false
 
-  # ── Vanilla JS Frontend (Static Site) ────────────────────────────────────────
-  - type: static
-    name: mana-frontend
-    rootDir: frontend
-    staticPublishPath: .
-    buildCommand: ""                 # No build step needed for vanilla JS
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: no-cache
-    plan: free
+# NOTE: The frontend (static site) cannot be declared in render.yaml.
+# Create it manually: Render dashboard → New → Static Site → connect the same repo,
+# set Root Directory to "frontend", Publish Directory to "." and leave Build Command empty.
