@@ -146,7 +146,25 @@ pip install flask flask-cors flask-sqlalchemy flask-jwt-extended \
 
 **2. Set up the database**
 
-Configure your MySQL or PostgreSQL connection string in `backend/app.py`, then run migrations.
+This backend reads the database connection from `DATABASE_URL`.
+
+Example `backend/.env`:
+
+```env
+JWT_SECRET_KEY=change-this-secret-key
+DATABASE_URL=postgresql://postgres:your_password@localhost:5432/mana_db
+```
+
+If you do not set `DATABASE_URL`, the app falls back to SQLite (`backend/instance/mana.db`).
+
+For live Apify sync, also add:
+
+```env
+APIFY_TOKEN=apify_api_xxxxx
+APIFY_POSTS_TASK_ID=your-posts-task-id
+APIFY_COMMENTS_TASK_ID=your-comments-task-id
+APIFY_WEBHOOK_SECRET=replace-with-a-long-random-secret
+```
 
 **3. Start the Flask server**
 
@@ -156,6 +174,23 @@ python app.py
 ```
 
 The API will be available at `http://localhost:5000/api`.
+
+### Apify Sync
+
+The backend now exposes Apify integration endpoints:
+
+- `GET /api/admin/apify/config`
+- `POST /api/admin/apify/start`
+- `POST /api/admin/apify/import-dataset`
+- `POST /api/admin/apify/webhook`
+
+Recommended flow:
+
+1. Create Apify tasks for Facebook posts and comments.
+2. Put the task IDs and `APIFY_TOKEN` in `backend/.env`.
+3. Use a public backend URL or tunnel for the webhook endpoint.
+4. Start a task from the admin API or schedule the task directly in Apify.
+5. Let Apify call `/api/admin/apify/webhook` after each successful run.
 
 **4. Connect the frontend**
 

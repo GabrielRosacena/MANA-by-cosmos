@@ -78,8 +78,7 @@ def normalize_item(item: dict):
     }
 
 
-def import_dataset(file_path: Path):
-    payload = json.loads(file_path.read_text(encoding="utf-8"))
+def import_items(payload: list[dict]):
     inserted = updated = processed = skipped = errors = 0
     translated = translation_failed = negation_handled = lemmatized = 0
     bigrams_detected = emotion_only_flagged = irrelevant_flagged = 0
@@ -272,6 +271,11 @@ def import_dataset(file_path: Path):
         "vader_sentiments_assigned": vader_sentiments_assigned,
     }
     return summary
+
+
+def import_dataset(file_path: Path):
+    payload = json.loads(file_path.read_text(encoding="utf-8"))
+    return import_items(payload)
 
 
 def main():

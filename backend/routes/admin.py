@@ -13,6 +13,17 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 
 from data import now_utc, parse_date_range, priority_label, score_tone
 from models import ActivityLog, Post, SystemSetting, User, db
+from services.apify_integration import (
+    KIND_COMMENTS,
+    KIND_POSTS,
+    VALID_KINDS,
+    extract_dataset_id,
+    extract_kind,
+    get_task_id,
+    import_dataset_items,
+    start_task,
+    validate_webhook_secret,
+)
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -72,6 +83,10 @@ def username_from_email(email: str):
         candidate = f"{base}{index}"
         index += 1
     return candidate
+
+
+def public_webhook_url():
+    return request.host_url.rstrip("/") + "/api/admin/apify/webhook"
 
 
 @admin_bp.route("/users", methods=["GET"])
@@ -316,3 +331,94 @@ def update_settings(section):
     log_activity("Settings updated", f"Updated {section} settings", "system")
     db.session.commit()
     return jsonify({"success": True, "section": section, "data": setting.payload})
+
+
+@admin_bp.route("/apify/config", methods=["GET"])
+@admin_required
+def get_apify_config():
+    configured = {}
+    for kind in (KIND_POSTS, KIND_COMMENTS):
+        try:
+            configured[kind] = {"taskId": get_task_id(kind), "configured": True}
+        except RuntimeError:
+            configured[kind] = {"taskId": None, "configured": False}
+    return jsonify({"webhookUrl": public_webhook_url(), "tasks": configured})
+
+
+@admin_bp.route("/apify/start", methods=["POST"])
+@admin_required
+def start_apify_task():
+    data = get_json()
+    kind = (data.get("kind") or "").strip().lower()
+    if kind not in VALID_KINDS:
+        return jsonify({"message": f"kind must be one of: {sorted(VALID_KINDS)}"}), 400
+
+    task_input = data.get("taskInput")
+    if task_input is not None and not isinstance(task_input, dict):
+        return jsonify({"message": "taskInput must be a JSON object."}), 400
+
+    try:
+        result = start_task(kind, webhook_url=public_webhook_url(), task_input=task_input)
+    except Exception as exc:
+        return jsonify({"message": str(exc)}), 500
+
+    log_activity(
+        "Apify task started",
+        f"Started {kind} task {result['task_id']} (run {result['run_id']})",
+        "system",
+    )
+    db.session.commit()
+    return jsonify(result), 202
+
+
+@admin_bp.route("/apify/import-dataset", methods=["POST"])
+@admin_required
+def import_apify_dataset():
+    data = get_json()
+    kind = (data.get("kind") or "").strip().lower()
+    dataset_id = (data.get("datasetId") or "").strip()
+    if kind not in VALID_KINDS:
+        return jsonify({"message": f"kind must be one of: {sorted(VALID_KINDS)}"}), 400
+    if not dataset_id:
+        return jsonify({"message": "datasetId is required."}), 400
+
+    try:
+        result = import_dataset_items(kind, dataset_id)
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"message": str(exc)}), 500
+
+    log_activity(
+        "Apify dataset imported",
+        f"Imported {kind} dataset {dataset_id} ({result['item_count']} items)",
+        "system",
+    )
+    db.session.commit()
+    return jsonify(result)
+
+
+@admin_bp.route("/apify/webhook", methods=["POST"])
+def apify_webhook():
+    payload = get_json()
+    if not validate_webhook_secret(payload.get("secret")):
+        return jsonify({"message": "Invalid webhook secret."}), 403
+
+    kind = extract_kind(payload)
+    dataset_id = extract_dataset_id(payload)
+    if kind not in VALID_KINDS or not dataset_id:
+        return jsonify({"message": "Webhook payload missing kind or dataset id."}), 400
+
+    try:
+        result = import_dataset_items(kind, dataset_id)
+        log_activity(
+            "Apify webhook import",
+            f"Imported {kind} dataset {dataset_id} ({result['item_count']} items)",
+            "system",
+            actor=None,
+        )
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"message": str(exc)}), 500
+
+    return jsonify({"success": True, **result})
