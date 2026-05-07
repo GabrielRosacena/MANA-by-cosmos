@@ -1,0 +1,36 @@
+services:
+  # ── Flask Backend ─────────────────────────────────────────────────────────────
+  - type: web
+    name: mana-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120
+    plan: free
+    envVars:
+      - key: JWT_SECRET_KEY
+        generateValue: true          # Render auto-generates a secure random value
+      - key: DATABASE_URL
+        sync: false                  # Set manually in Render dashboard (your Supabase URL)
+      - key: CORS_ORIGINS
+        sync: false                  # e.g. https://mana-frontend.onrender.com
+      - key: APIFY_TOKEN
+        sync: false
+      - key: APIFY_POSTS_TASK_ID
+        sync: false
+      - key: APIFY_COMMENTS_TASK_ID
+        sync: false
+      - key: APIFY_WEBHOOK_SECRET
+        sync: false
+
+  # ── Vanilla JS Frontend (Static Site) ────────────────────────────────────────
+  - type: static
+    name: mana-frontend
+    rootDir: frontend
+    staticPublishPath: .
+    buildCommand: ""                 # No build step needed for vanilla JS
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    plan: free

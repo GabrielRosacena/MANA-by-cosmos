@@ -78,9 +78,24 @@ app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # ── Extensions ────────────────────────────────────────────────────────────────
-CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:5500"])  # add your frontend origin
+_cors_origins_env = os.environ.get(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:5500",
+)
+_cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()]
+CORS(app, origins=_cors_origins)
 JWTManager(app)
 db.init_app(app)
+
+
+@app.route("/", methods=["GET"])
+def root():
+    return {"status": "ok", "service": "mana-backend"}
+
+
+@app.route("/api/health", methods=["GET"])
+def health():
+    return {"status": "ok"}
 
 # ── Blueprints ────────────────────────────────────────────────────────────────
 app.register_blueprint(auth_bp,     url_prefix="/api/auth")
@@ -314,6 +329,8 @@ def ensure_database():
         seed_default_users()
         seed_settings()
 
+# Run at module load so gunicorn workers also initialise the DB.
+ensure_database()
+
 if __name__ == "__main__":
-    ensure_database()
     app.run(debug=True, port=5000)
