@@ -329,8 +329,14 @@ def ensure_database():
         seed_default_users()
         seed_settings()
 
-# Run at module load so gunicorn workers also initialise the DB.
-ensure_database()
+# Run at module load so gunicorn also initialises the DB on startup.
+try:
+    ensure_database()
+except Exception as _db_err:
+    import sys
+    print(f"[MANA] WARNING: ensure_database() failed: {_db_err}", file=sys.stderr)
+    print("[MANA] App will start, but the database may not be initialised.", file=sys.stderr)
+    print("[MANA] Check that DATABASE_URL is set correctly in your environment.", file=sys.stderr)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
