@@ -16,12 +16,22 @@ from models import Post
 stats_bp = Blueprint("stats", __name__)
 
 
+def comparable_dt(value):
+    if value is None:
+        return None
+    tzinfo = getattr(value, "tzinfo", None)
+    if tzinfo is not None:
+        return value.replace(tzinfo=None)
+    return value
+
+
 def filtered_posts(date_range: str):
     cutoff = now_utc() - parse_date_range(date_range)
     return Post.query.filter(Post.is_relevant == True, Post.date >= cutoff).order_by(Post.date.asc()).all()
 
 
 @stats_bp.route("/analytics/sentiment-histogram", methods=["GET"])
+@stats_bp.route("/analytics/histogram", methods=["GET"])
 @jwt_required(optional=True)
 def sentiment_histogram():
     date_range = request.args.get("date_range", "14d")
@@ -50,6 +60,7 @@ def sentiment_histogram():
 
 
 @stats_bp.route("/analytics/sentiment-trend", methods=["GET"])
+@stats_bp.route("/analytics/trend", methods=["GET"])
 @jwt_required(optional=True)
 def sentiment_trend():
     date_range = request.args.get("date_range", "14d")
@@ -68,9 +79,12 @@ def sentiment_trend():
     positive, neutral, negative = [], [], []
     posts = filtered_posts(date_range)
     for bucket_start, bucket_end in rows:
+        bucket_start_cmp = comparable_dt(bucket_start)
+        bucket_end_cmp = comparable_dt(bucket_end)
         pos = neu = neg = 0
         for post in posts:
-            if bucket_start <= post.date < bucket_end:
+            post_date_cmp = comparable_dt(post.date)
+            if post_date_cmp and bucket_start_cmp <= post_date_cmp < bucket_end_cmp:
                 tone = score_tone(post.sentiment_score)
                 if tone == "positive":
                     pos += 1
@@ -101,6 +115,7 @@ def cluster_activity():
 
 
 @stats_bp.route("/analytics/priority-distribution", methods=["GET"])
+@stats_bp.route("/analytics/priority", methods=["GET"])
 @jwt_required(optional=True)
 def priority_distribution():
     date_range = request.args.get("date_range", "14d")

@@ -7,6 +7,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from datetime import timedelta
 from functools import wraps
+import traceback
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
@@ -17,10 +18,10 @@ from services.apify_integration import (
     KIND_COMMENTS,
     KIND_POSTS,
     VALID_KINDS,
-    extract_dataset_id,
     extract_kind,
     get_task_id,
     import_dataset_items,
+    resolve_dataset_id,
     start_task,
     validate_webhook_secret,
 )
@@ -50,7 +51,11 @@ def get_json():
 
 
 def log_activity(action: str, detail: str, log_type: str = "admin", actor: User | None = None):
-    actor = actor or current_admin()
+    if actor is None:
+        try:
+            actor = current_admin()
+        except Exception:
+            actor = None
     db.session.add(
         ActivityLog(
             actor_username=actor.username if actor else None,
@@ -404,7 +409,7 @@ def apify_webhook():
         return jsonify({"message": "Invalid webhook secret."}), 403
 
     kind = extract_kind(payload)
-    dataset_id = extract_dataset_id(payload)
+    dataset_id = resolve_dataset_id(payload)
     if kind not in VALID_KINDS or not dataset_id:
         return jsonify({"message": "Webhook payload missing kind or dataset id."}), 400
 
@@ -419,6 +424,7 @@ def apify_webhook():
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
-        return jsonify({"message": str(exc)}), 500
+        traceback.print_exc()
+        return jsonify({"message": str(exc), "error_type": type(exc).__name__}), 500
 
     return jsonify({"success": True, **result})

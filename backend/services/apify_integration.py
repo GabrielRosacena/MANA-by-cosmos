@@ -31,6 +31,13 @@ def get_client():
     return ApifyClient(require_env(APIFY_TOKEN_ENV))
 
 
+def get_run(run_id: str) -> dict[str, Any]:
+    run = get_client().run(run_id).get()
+    if not run:
+        raise RuntimeError(f"Apify run {run_id} was not found.")
+    return run
+
+
 def get_task_id(kind: str) -> str:
     if kind == KIND_POSTS:
         return require_env(APIFY_POSTS_TASK_ID_ENV)
@@ -109,6 +116,23 @@ def extract_dataset_id(payload: dict[str, Any]) -> str | None:
             value = resource.get(key)
             if value:
                 return str(value)
+    return None
+
+
+def resolve_dataset_id(payload: dict[str, Any]) -> str | None:
+    dataset_id = extract_dataset_id(payload)
+    if dataset_id:
+        return dataset_id
+
+    resource = payload.get("resource") or {}
+    if isinstance(resource, dict):
+        run_id = resource.get("id")
+        if run_id:
+            run = get_run(str(run_id))
+            for key in ("defaultDatasetId", "datasetId"):
+                value = run.get(key)
+                if value:
+                    return str(value)
     return None
 
 
