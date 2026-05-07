@@ -16,7 +16,7 @@ const SUPABASE_KEY = "sb_publishable_cj0YjBeAVubMaZVOyYXNyQ_D0en0BF_";
 const _isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 const API_BASE = _isLocal
   ? "http://localhost:5000/api"
-  : "https://mana-backend.onrender.com/api"; // TODO: replace with your actual Render backend URL
+  : "https://mana-backend-4s1w.onrender.com/api";
 const USE_MOCK = false;
 
 // ─── JWT Helpers ──────────────────────────────────────────────────────────────
