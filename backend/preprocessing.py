@@ -22,6 +22,11 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     WordNetLemmatizer = None
 
+# Set to True the first time Google Translate returns a quota/rate-limit error.
+# All subsequent translate_text() calls return the input unchanged instead of
+# hammering the API with requests that will keep failing.
+_TRANSLATE_QUOTA_EXHAUSTED = False
+
 TEXT_FIELDS = ("text", "caption", "content", "comment", "message", "postText", "body")
 URL_RE = re.compile(r"(https?://\S+|www\.\S+)", re.IGNORECASE)
 MENTION_RE = re.compile(r"(?<!\w)@([A-Za-z0-9_]+)")
@@ -31,6 +36,8 @@ NON_WORD_RE = re.compile(r"[^a-z0-9\s]")
 WHITESPACE_RE = re.compile(r"\s+")
 LETTER_RE = re.compile(r"[a-zA-Z]")
 EMOJI_ONLY_RE = re.compile(r"^[\s\W_]+$", re.UNICODE)
+_REPEATED_CHAR_RE = re.compile(r"(.)\1{2,}")
+VADER_STRIP_RE = re.compile(r"[^a-zA-Z0-9\s\!\?\.\,\'\:]")
 
 NEGATION_WORDS = {
     "no", "not", "never", "walang", "hindi", "wala", "cannot", "cant", "can't", "dont", "don't",
@@ -44,29 +51,95 @@ DISASTER_TERMS = {
     "wash", "nutrition", "school", "class", "suspension", "boat", "roof", "camp",
 }
 TAGALOG_HINTS = {
-    "walang", "wala", "hindi", "tulong", "saklolo", "baha", "ulan", "nasaan", "kalsada", "evacuation",
-    "nastranded", "nastranded", "rescue", "gamot", "tubig", "pagkain", "barangay", "kuryente", "putik",
+    # Core negations / function words unique to Filipino
+    "walang", "wala", "hindi", "huwag",
+    # Disaster-domain Tagalog nouns
+    "tubig", "pagkain", "gamot", "kuryente", "putik",
+    "baha", "ulan", "bagyo", "lindol", "sunog",
+    "kalsada",
+    # Geographic / community terms
+    "barangay", "sityo", "purok",
+    # Aid / rescue (Tagalog forms only)
+    "tulong", "saklolo", "sagipin",
+    # Question / location words
+    "nasaan", "saan", "kailan", "paano", "bakit",
+    # Verbal disaster forms (Tagalog morphology)
+    "nastranded", "naligtas", "nailigtas", "nailikas",
+    "nawalan", "naputol", "binaha", "bumaha", "nagbabaha",
+    "nakakulong", "nalunod",
+    "patay", "sugat", "namatay", "nasaktan",
+    # High-frequency Filipino discourse markers (near-certain Filipino signal)
+    "mga", "po",
+    # Pronouns absent from English
+    "namin", "natin", "nila", "kami", "sila", "tayo", "kayo",
+    "nandito", "nandiyan", "nandoon",
+    # Common Filipino intensifiers / exclamations
+    "grabe", "grabeh", "grabi",
+    "matindi", "malakas", "marami",
+    # na- prefix past-tense Tagalog verbs (extremely common in disaster reports)
+    "nabaha", "nasalba", "nasira", "naipit", "naiipit",
+    "natapos", "natigil", "naiwan", "nasugatan", "nawasak",
+    # Additional disaster-specific Tagalog nouns
+    "pagbaha", "pagguho", "sakuna", "pinsala", "biktima",
+    # Cebuano/Bisaya — covers Visayas + Mindanao disaster posts (~30% of PH)
+    "tabang", "lunod", "naanod", "napukan", "buhawi",
+    "gubot", "asa", "unsay", "ngano",
+}
+INFORMAL_WORD_MAP = {
+    # Filipino negation shortcuts → standard Tagalog (helps translation + negation handling)
+    "di": "hindi",
+    "dili": "hindi",
+    "wag": "huwag",
+    "hwag": "huwag",
+    # Compressed Tagalog particles → standard forms (cleaner translator input)
+    "lng": "lang",
+    "nman": "naman",
+    "nmn": "naman",
+    # Location abbreviations
+    "brgy": "barangay",
+    "bgy": "barangay",
+    "bldg": "building",
+    # Informal spelling variants of common Filipino words
+    "grabeh": "grabe",
+    "grabi": "grabe",
+    # Taglish compound disaster words → English equivalents (VADER + CorEx friendly)
+    "nastranded": "stranded",
+    "naflood": "flooded",
+    "nabaha": "flooded",
+    "binaha": "flooded",
+    # English abbreviations safe to expand in this domain
+    "pls": "please",
+    "plss": "please",
+    "tnx": "thanks",
+    "ty": "thanks",
+    "thx": "thanks",
 }
 EMOTION_ONLY_WORDS = {
-    "grabe", "grabi", "hala", "hay", "hays", "omg", "aww", "aw", "argh", "sad", "cry", "iyak", "wow",
+    "grabe", "grabi", "grabeh", "hala", "hay", "hays", "omg", "aww", "aw", "argh", "sad", "cry", "iyak", "wow",
     "lol", "lmao", "help", "pls", "please", "prayers", "pray", "rip",
 }
 BIGRAM_ALLOWLIST = {
-    "flood_water",
-    "rescue_team",
-    "road_damage",
-    "power_outage",
-    "evacuation_center",
-    "relief_goods",
-    "emergency_shelter",
-    "class_suspension",
-    "signal_loss",
-    "medical_team",
-    "clean_water",
-    "food_pack",
-    "safe_space",
-    "blocked_road",
-    "rescue_boat",
+    # original 15
+    "flood_water", "rescue_team", "road_damage", "power_outage",
+    "evacuation_center", "relief_goods", "emergency_shelter",
+    "class_suspension", "signal_loss", "medical_team", "clean_water",
+    "food_pack", "safe_space", "blocked_road", "rescue_boat",
+    # cluster-a (Food/NFI)
+    "relief_pack", "canned_goods", "hygiene_kit", "water_refill",
+    # cluster-b (WASH/Medical)
+    "health_center", "first_aid",
+    # cluster-c (CCCM)
+    "evacuation_site", "displaced_families", "covered_court",
+    # cluster-d (Logistics)
+    "blocked_bridge", "alternate_route", "road_clearing",
+    # cluster-e (ETC)
+    "no_signal", "no_network", "power_bank", "cell_site",
+    # cluster-f (Education)
+    "walang_pasok", "school_closure", "no_classes",
+    # cluster-g (SRR)
+    "search_party", "coast_guard", "swift_water",
+    # cluster-h (MDM)
+    "missing_person", "family_tracing", "body_identified",
 }
 STOP_WORDS = {
     "a", "about", "after", "again", "all", "also", "am", "an", "and", "are", "as", "at", "be", "been",
@@ -80,6 +153,15 @@ STOP_WORDS = {
     "while", "who", "whom", "why", "with", "you", "your", "yours", "yourself", "yourselves", "sa", "ang",
     "mga", "si", "ni", "ng", "na", "po", "pa", "lang", "din", "rin", "ito", "iyan", "yun", "yan", "may",
     "meron", "naman", "kasi", "pero", "daw", "raw", "nga", "nasa", "dito", "doon",
+    # Additional Tagalog pronouns
+    "ako", "ikaw", "ka", "siya", "niya", "namin", "natin", "nila",
+    "kami", "tayo", "kayo", "sila", "akin", "iyo", "kanya",
+    # Additional Tagalog demonstratives / locatives
+    "iyon", "diyan", "yung", "ung",
+    # Common Tagalog discourse fillers
+    "ngayon", "pala", "nang", "muna", "ba", "eh", "ha",
+    "talaga", "siguro", "sana", "kaya", "kahit",
+    "kapag", "kung", "habang", "ganun", "ganito",
 }
 LEMMA_OVERRIDES = {
     "flooding": "flood",
@@ -89,7 +171,6 @@ LEMMA_OVERRIDES = {
     "rescuing": "rescue",
     "stranded": "strand",
     "supplies": "supply",
-    "goods": "good",
     "children": "child",
     "people": "person",
     "roads": "road",
@@ -136,6 +217,32 @@ def clean_text(text: str):
     return value
 
 
+def clean_text_for_vader(text: str) -> str:
+    """Branch 2B (Sentiment Track): minimal cleaning for VADER.
+
+    Preserves casing (ALL CAPS is a VADER intensity signal) and sentiment
+    punctuation (!!!, ? carry weight). Converts emojis to text aliases via
+    emoji.demojize() so VADER's lexicon can score them (e.g. 😢 → :crying_face:).
+    Falls back gracefully if the emoji library is not installed.
+    """
+    value = unescape(text or "")
+    value = HTML_TAG_RE.sub(" ", value)
+    value = URL_RE.sub(" ", value)
+    value = MENTION_RE.sub(" ", value)
+    value = HASHTAG_RE.sub(r" \1 ", value)
+    # Convert emojis → :text_alias: so VADER can score them via its lexicon.
+    # e.g. 😭 → :loudly_crying_face:   🆘 → :SOS_button:
+    try:
+        import emoji as _emoji_lib
+        value = _emoji_lib.demojize(value, delimiters=(" :", ": "))
+    except ImportError:
+        pass  # emoji lib not installed — raw emojis stripped by VADER_STRIP_RE below
+    # VADER_STRIP_RE keeps letters, digits, spaces, !?.,': (colon for :emoji_name: tokens).
+    value = VADER_STRIP_RE.sub(" ", value)
+    value = WHITESPACE_RE.sub(" ", value).strip()
+    return value
+
+
 def tokenize_text(cleaned_text: str):
     if not cleaned_text:
         return []
@@ -159,6 +266,21 @@ def build_location_terms(item: dict):
     return location_terms
 
 
+def normalize_informal_tokens(tokens: list[str]) -> list[str]:
+    """Collapse repeated-char emphasis and map informal Filipino/Taglish words to standard forms.
+
+    Applied only on the ML path — raw_text and clean_text are never touched.
+    Collapse 3+ repeated chars to 2 so "flooood" → "flood" without breaking
+    legitimate double-letter words like "good" or "need".
+    """
+    result = []
+    for token in tokens:
+        t = _REPEATED_CHAR_RE.sub(r"\1\1", token)
+        t = INFORMAL_WORD_MAP.get(t, t)
+        result.append(t)
+    return result
+
+
 def should_translate(cleaned_text: str, tokens: list[str]):
     if not cleaned_text or not tokens:
         return False
@@ -167,14 +289,27 @@ def should_translate(cleaned_text: str, tokens: list[str]):
 
 
 def translate_text(cleaned_text: str, translator=None):
+    global _TRANSLATE_QUOTA_EXHAUSTED
     if not cleaned_text:
         return "", "skipped", None
+    if _TRANSLATE_QUOTA_EXHAUSTED:
+        return cleaned_text, "skipped", "Google Translate quota exhausted — skipping translation."
     if translator is None:
         if GoogleTranslator is None:
             return cleaned_text, "skipped", "Translator dependency unavailable."
         translator = GoogleTranslator(source="auto", target="en")
-    translated = translator.translate(cleaned_text)
-    return (translated or cleaned_text).strip(), "translated", None
+    try:
+        translated = translator.translate(cleaned_text)
+        translated = (translated or cleaned_text).strip()
+        status = "skipped" if translated == cleaned_text.strip() else "translated"
+        return translated, status, None
+    except Exception as exc:
+        err_lower = str(exc).lower()
+        if any(sig in err_lower for sig in ("429", "quota", "too many", "rate limit", "limit exceeded")):
+            _TRANSLATE_QUOTA_EXHAUSTED = True
+            import sys
+            print("[MANA] Google Translate quota hit — disabling translation for this run.", file=sys.stderr)
+        return cleaned_text, "error", str(exc)
 
 
 def apply_negation_handling(tokens: list[str]):
@@ -327,6 +462,7 @@ def preprocess_record(
         "raw_text": None,
         "clean_text": None,
         "translated_text": None,
+        "vader_text": None,
         "translation_status": "skipped",
         "tokens": [],
         "negation_handled_tokens": [],
@@ -377,10 +513,15 @@ def preprocess_record(
                     result["stats"]["irrelevant_flagged"] = 1
             return result
 
-        translated_text = cleaned
-        if should_translate(cleaned, tokens):
+        # Normalize informal/slang tokens for the ML path only.
+        # raw_text and clean_text are stored unchanged above and are never modified.
+        normalized_tokens = normalize_informal_tokens(tokens)
+        normalized_clean = " ".join(normalized_tokens)
+
+        translated_text = normalized_clean
+        if should_translate(normalized_clean, normalized_tokens):
             try:
-                translated_text, translation_status, translation_error = translate_text(cleaned, translator=translator)
+                translated_text, translation_status, translation_error = translate_text(normalized_clean, translator=translator)
                 result["translated_text"] = translated_text
                 result["translation_status"] = translation_status
                 if translation_status == "translated":
@@ -388,12 +529,31 @@ def preprocess_record(
                 if translation_error:
                     result["error_message"] = merge_error(result["error_message"], translation_error)
             except Exception as exc:
-                result["translated_text"] = cleaned
+                result["translated_text"] = normalized_clean
                 result["translation_status"] = "error"
                 result["error_message"] = merge_error(result["error_message"], f"Translation failed: {exc}")
                 result["stats"]["translation_failed"] = 1
         else:
-            result["translated_text"] = cleaned
+            result["translated_text"] = normalized_clean
+
+        # --- VADER-specific path ---
+        # Detect translation need from lowercased tokens, then translate the
+        # casing-preserved text so VADER receives English with ALL CAPS + !!!  intact.
+        vader_clean = clean_text_for_vader(raw_text)
+        _vt_lower = tokenize_text(vader_clean.lower())
+        _vt_normalized = normalize_informal_tokens(_vt_lower)
+        if should_translate(" ".join(_vt_normalized), _vt_normalized):
+            try:
+                vader_translated, _, _ = translate_text(vader_clean, translator=translator)
+                result["vader_text"] = vader_translated or vader_clean
+            except Exception:
+                result["vader_text"] = vader_clean
+        else:
+            result["vader_text"] = vader_clean
+
+        # Never store empty string — None is the sentinel for "not yet computed".
+        if not result.get("vader_text"):
+            result["vader_text"] = None
 
         translation_tokens = tokenize_preserving_apostrophes(result["translated_text"] or cleaned)
         negation_tokens, negation_changed = apply_negation_handling(translation_tokens)
@@ -462,6 +622,7 @@ def save_preprocessed_text(
     row.raw_text = processed["raw_text"]
     row.clean_text = processed["clean_text"]
     row.translated_text = processed["translated_text"]
+    row.vader_text = processed["vader_text"]
     row.translation_status = processed["translation_status"]
     row.set_tokens(processed["tokens"])
     row.set_negation_handled_tokens(processed["negation_handled_tokens"])

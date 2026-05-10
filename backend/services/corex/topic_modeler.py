@@ -22,52 +22,66 @@ import corextopic.corextopic as ct
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
+# Topics are aligned 1-to-1 with the 8 NDRRMC disaster response clusters (A–H).
+# Old "flood" and "communication" topics were removed — flood is an event type (not a
+# response cluster) and communication overlapped with power_outage (both = cluster-e).
+# "education" (cluster-f) and "dead_missing" (cluster-h) fill the two gaps that had
+# no CorEx coverage, so all 8 NDRRMC clusters now have a dedicated topic.
 TOPIC_LABELS = [
-    "flood",
-    "evacuation",
-    "rescue",
-    "infrastructure_damage",
-    "relief",
-    "power_outage",
-    "health_medical",
-    "communication",
+    "education",        # cluster-f
+    "evacuation",       # cluster-c
+    "rescue",           # cluster-g
+    "logistics",        # cluster-d
+    "relief",           # cluster-a
+    "telecom_power",    # cluster-e
+    "health_medical",   # cluster-b
+    "dead_missing",     # cluster-h
 ]
 
 # Anchor words aligned with NDRRMC disaster response clusters.
 # Each list seeds the corresponding CorEx topic — CorEx will then expand
 # these based on co-occurrence patterns in the actual corpus.
+# Multi-word phrases are included; CountVectorizer uses ngram_range=(1,2) so bigrams work.
 ANCHOR_WORDS: dict[str, list[str]] = {
-    "flood": [
-        "flood", "baha", "tubig", "inundation", "flash flood",
-        "water level", "overflow", "flooded", "flooding",
+    "education": [
+        "school", "class", "suspension", "deped", "students", "learners",
+        "walang pasok", "class suspended", "school closure", "temporary classroom",
+        "school cancelled", "online class", "modular",
     ],
     "evacuation": [
         "evacuation", "evacuate", "shelter", "likas", "evacuation center",
-        "displaced", "evacuees", "camp",
+        "displaced", "evacuees", "camp", "evacuation site", "overcrowded",
+        "registration", "safe space", "tent", "covered court",
     ],
     "rescue": [
         "rescue", "trapped", "stranded", "sagipin", "search and rescue",
-        "sos", "roof", "retrieval", "rescue boat",
+        "sos", "roof", "retrieval", "rescue boat", "save us",
+        "tabang", "saklolo", "helicopter", "coast guard",
     ],
-    "infrastructure_damage": [
-        "damage", "collapsed", "road", "bridge", "landslide", "guho",
-        "blocked", "debris", "infrastructure",
+    "logistics": [
+        "road", "bridge", "blocked", "landslide", "truck", "convoy",
+        "delivery", "reroute", "passable", "road clearing", "warehouse",
+        "transport", "debris", "collapsed", "guho", "infrastructure",
     ],
     "relief": [
         "relief", "ayuda", "goods", "donation", "food pack",
-        "supply", "distribution", "relief goods", "rice",
+        "supply", "distribution", "relief goods", "rice", "bigas",
+        "pagkain", "blanket", "hygiene kit", "water refill", "canned goods",
     ],
-    "power_outage": [
+    "telecom_power": [
         "blackout", "kuryente", "power outage", "electricity",
-        "walang kuryente", "brownout", "no power",
+        "walang kuryente", "brownout", "no power", "signal", "network",
+        "no signal", "internet", "cell site", "radio", "connectivity", "telecom",
     ],
     "health_medical": [
         "hospital", "injured", "medical", "health", "sick",
-        "ospital", "medicine", "doctor", "patient",
+        "ospital", "medicine", "doctor", "patient", "nurse",
+        "gamot", "clinic", "fever", "dehydration", "sanitation", "wound",
     ],
-    "communication": [
-        "signal", "network", "communication", "internet",
-        "no signal", "cell site", "connectivity", "telecom",
+    "dead_missing": [
+        "missing", "missing person", "fatality", "casualty", "dead",
+        "body", "retrieval", "identified", "unaccounted", "family tracing",
+        "body identified", "hospital list", "coordination desk", "remains",
     ],
 }
 

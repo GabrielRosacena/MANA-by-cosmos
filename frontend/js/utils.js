@@ -10,6 +10,20 @@ function formatCompact(n) { return new Intl.NumberFormat("en-US", { notation:"co
 function formatDate(d)    { return new Date(d).toLocaleString("en-US", { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" }); }
 function toCount(value)   { return Number.isFinite(Number(value)) ? Number(value) : 0; }
 
+function timeAgo(date) {
+  const diff = Date.now() - new Date(date).getTime();
+  const h = Math.floor(diff / 3600000);
+  const d = Math.floor(diff / 86400000);
+  if (h < 1) return "just now";
+  if (h < 24) return `${h}h ago`;
+  if (d === 1) return "1d ago";
+  return `${d}d ago`;
+}
+
+function getInitials(name) {
+  return name.replace(/^@/, "").split(/\s+/).slice(0, 3).map(w => w[0] || "").join("").toUpperCase().slice(0, 3);
+}
+
 // ─── Post Engagement ──────────────────────────────────────────────────────────
 function getEngagement(post) {
   return post.source === "Facebook"
@@ -48,17 +62,29 @@ function getDominantSentiment(score) {
 }
 
 // ─── CSS Class Helpers ────────────────────────────────────────────────────────
+function normalizePriority(priority) {
+  if (priority === "Critical")   return "High";
+  if (priority === "Moderate")   return "Medium";
+  if (priority === "Monitoring") return "Low";
+  return priority;
+}
+
 function priorityClass(priority) {
-  if (priority === "Critical") return "priority-critical";
-  if (priority === "High")     return "priority-high";
-  if (priority === "Moderate") return "priority-moderate";
-  return "priority-monitoring";
+  const p = normalizePriority(priority);
+  if (p === "High")   return "priority-high";
+  if (p === "Medium") return "priority-medium";
+  return "priority-low";
+}
+
+function priorityPercent(post) {
+  const base = { 4: 88, 3: 70, 2: 50 }[post.severityRank] || 38;
+  const adj  = Math.round(((post.sentimentScore || 50) / 100) * 12) - 6;
+  return Math.min(99, Math.max(20, base + adj));
 }
 
 function statusClass(status) { return `status-${status.toLowerCase()}`; }
 
 function kpiToneClass(label) {
-  if (label.includes("Critical"))            return "kpi-red";
   if (label.includes("High Priority"))       return "kpi-gold";
   if (label.includes("Total Posts Analyzed"))return "kpi-blue";
   if (label.includes("Facebook"))            return "kpi-cyan";

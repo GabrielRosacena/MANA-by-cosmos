@@ -114,6 +114,40 @@ def cluster_activity():
     return jsonify({"clusterActivity": cluster_activity_data})
 
 
+@stats_bp.route("/dashboard/posts-over-time", methods=["GET"])
+@jwt_required(optional=True)
+def posts_over_time():
+    from datetime import datetime, timezone
+    date_range = request.args.get("date_range", "24h")
+    cutoff = now_utc() - timedelta(hours=24)
+    posts = Post.query.filter(Post.is_relevant == True, Post.date >= cutoff).order_by(Post.date.asc()).all()
+
+    hourly_counts = defaultdict(int)
+    for post in posts:
+        dt = post.date
+        if dt is None:
+            continue
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        hourly_counts[dt.strftime("%H:00")] += 1
+
+    now = now_utc()
+    result = []
+    for i in range(24):
+        h = (now.hour - 23 + i) % 24
+        label = f"{h:02d}:00"
+        result.append({"hour": label, "count": hourly_counts.get(label, 0)})
+
+    peak_entry = max(result, key=lambda x: x["count"]) if result else {"hour": "00:00", "count": 0}
+    total_volume = sum(e["count"] for e in result)
+
+    return jsonify({
+        "hourly": result,
+        "peak": {"hour": peak_entry["hour"], "count": peak_entry["count"]},
+        "spike": {"time": peak_entry["hour"] + " PHT", "volume": total_volume},
+    })
+
+
 @stats_bp.route("/analytics/priority-distribution", methods=["GET"])
 @stats_bp.route("/analytics/priority", methods=["GET"])
 @jwt_required(optional=True)

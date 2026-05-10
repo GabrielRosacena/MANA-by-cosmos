@@ -208,6 +208,7 @@ def ensure_preprocessed_text_columns():
             clean_text TEXT,
             tokens_json TEXT NOT NULL DEFAULT '[]',
             translated_text TEXT,
+            vader_text TEXT,
             translation_status VARCHAR(32) NOT NULL DEFAULT 'skipped',
             negation_handled_tokens_json TEXT NOT NULL DEFAULT '[]',
             lemmatized_tokens_json TEXT NOT NULL DEFAULT '[]',
@@ -227,6 +228,7 @@ def ensure_preprocessed_text_columns():
     columns = {row[1] for row in cur.execute("PRAGMA table_info(preprocessed_texts)").fetchall()}
     wanted = {
         "translated_text": "ALTER TABLE preprocessed_texts ADD COLUMN translated_text TEXT",
+        "vader_text": "ALTER TABLE preprocessed_texts ADD COLUMN vader_text TEXT",
         "translation_status": "ALTER TABLE preprocessed_texts ADD COLUMN translation_status VARCHAR(32) NOT NULL DEFAULT 'skipped'",
         "negation_handled_tokens_json": "ALTER TABLE preprocessed_texts ADD COLUMN negation_handled_tokens_json TEXT NOT NULL DEFAULT '[]'",
         "lemmatized_tokens_json": "ALTER TABLE preprocessed_texts ADD COLUMN lemmatized_tokens_json TEXT NOT NULL DEFAULT '[]'",

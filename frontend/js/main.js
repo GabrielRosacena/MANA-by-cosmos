@@ -29,10 +29,11 @@ const state = {
   analyticsRange:   "14d",
 
   // User state
-  pinned:      new Set(),
-  statuses:    {},
-  profile:     { username: "admin_mana", role: "LGU Analyst", email: "lgu.analyst@mana.ph" },
-  emailAlerts: true,
+  pinned:        new Set(),
+  statuses:      {},
+  verifications: {},
+  profile:       { username: "admin_mana", role: "LGU Analyst", email: "lgu.analyst@mana.ph" },
+  emailAlerts:   true,
 };
 
 const pageTitles = {
@@ -90,10 +91,61 @@ async function loadAppData() {
 
     state.analytics        = await ChartsService.getAnalytics(state.analyticsRange);
     state.dashboardSummary = buildDashboardSummary(state.posts, state.dashboardRange, state.clusters);
+    initVerifications(state.posts);
   } catch (err) {
     console.error("Data load failed:", err);
     showToast("Data load error", err.message || "Could not load data. Check backend connection.");
   }
+}
+
+// ─── Verification helpers ─────────────────────────────────────────────────────
+function initVerifications(posts) {
+  state.verifications = {};
+  for (const post of posts) {
+    const ref = MOCK_CROSS_REFS[post.id];
+    state.verifications[post.id] = ref
+      ? { status:"auto-verified",   crossRefs:ref.crossRefs, matchCount:ref.matchCount, note:"", markedBy:null }
+      : { status:"auto-unverified", crossRefs:[],             matchCount:0,              note:"", markedBy:null };
+  }
+  const saved = localStorage.getItem("mana-verifications");
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      for (const [id, v] of Object.entries(parsed)) {
+        if (state.verifications[id]) state.verifications[id] = { ...state.verifications[id], ...v };
+      }
+    } catch (_) {}
+  }
+}
+
+function persistVerifications() {
+  localStorage.setItem("mana-verifications", JSON.stringify(state.verifications));
+}
+
+function refreshVerifyBox(postId) {
+  const post = state.posts.find(p => p.id === postId);
+  if (!post) return;
+
+  // Capture which wrappers had an open popup before replacing
+  const openWrappers = new Set();
+  document.querySelectorAll(`[data-verify-for="${postId}"]`).forEach(existing => {
+    if (!existing.classList.contains("hidden")) openWrappers.add(existing.closest(".verify-wrapper"));
+    existing.outerHTML = renderVerifyBox(post);
+  });
+
+  // Re-open popups in the wrappers that were open
+  openWrappers.forEach(wrapper => {
+    if (!wrapper) return;
+    const fresh = wrapper.querySelector(`[data-verify-for="${postId}"]`);
+    if (fresh) fresh.classList.remove("hidden");
+  });
+
+  const v = state.verifications[postId];
+  const isVerified = v.status === "auto-verified" || v.status === "manually-verified";
+  document.querySelectorAll(`[data-verify-toggle="${postId}"]`).forEach(btn => {
+    btn.textContent = isVerified ? "✓ Verified" : "⊕ Unverified";
+    btn.className   = `verify-btn verify-${v.status}`;
+  });
 }
 
 // ─── Preferences (localStorage only — no API) ─────────────────────────────────
@@ -132,6 +184,10 @@ function bindStaticControls() {
     state.dashboardComments = await DashboardService.getDashboardComments(state.dashboardRange).catch(() => state.dashboardComments);
     renderDashboard();
     renderSourceDirectory();
+  });
+
+  document.getElementById("priorityFilter").addEventListener("change", e => {
+    renderPriorityPosts(e.target.value);
   });
 
   document.getElementById("analyticsRange").addEventListener("change", async e => {
@@ -192,11 +248,133 @@ function handleDocumentClick(event) {
 
   if (pin) togglePin(pin.dataset.pin);
 
+  const openPost = event.target.closest("[data-open-post]");
+  if (openPost) {
+    showToast("Post link unavailable", "Direct post URLs are not stored in the current dataset.");
+  }
+
   if (commentToggle) {
-    const box = document.getElementById("comments-" + commentToggle.dataset.toggleComments);
+    const postCard = commentToggle.closest("[data-post-card]");
+    const box = postCard?.querySelector(`[data-comments-box="${commentToggle.dataset.toggleComments}"]`);
     if (box) {
       box.classList.toggle("open");
-      commentToggle.textContent = box.classList.contains("open") ? "Hide top comments" : "View top comments";
+      const isOpen = box.classList.contains("open");
+      commentToggle.setAttribute("aria-expanded", String(isOpen));
+      const label = commentToggle.querySelector(".comment-toggle-label");
+      if (label) label.textContent = isOpen ? "Hide Comments" : "View Comments";
+    }
+  }
+
+  const verifyToggle = event.target.closest("[data-verify-toggle]");
+  if (!event.target.closest(".verify-wrapper")) {
+    document.querySelectorAll(".verify-popup:not(.hidden)").forEach(p => p.classList.add("hidden"));
+  }
+  if (verifyToggle) {
+    const popup = verifyToggle.closest(".verify-wrapper")?.querySelector(".verify-popup");
+    document.querySelectorAll(".verify-popup:not(.hidden)").forEach(p => {
+      if (p !== popup) p.classList.add("hidden");
+    });
+    if (popup) popup.classList.toggle("hidden");
+  }
+
+  const recToggle = event.target.closest("[data-rec-toggle]");
+  if (!event.target.closest(".rec-wrapper")) {
+    document.querySelectorAll(".rec-popup:not(.hidden)").forEach(p => p.classList.add("hidden"));
+  }
+  if (recToggle) {
+    const popup = recToggle.closest(".rec-wrapper")?.querySelector(".rec-popup");
+    document.querySelectorAll(".rec-popup:not(.hidden)").forEach(p => {
+      if (p !== popup) p.classList.add("hidden");
+    });
+    if (popup) popup.classList.toggle("hidden");
+  }
+
+  const markUnverified = event.target.closest("[data-mark-unverified]");
+  if (markUnverified) {
+    const pid = markUnverified.dataset.markUnverified;
+    if (state.verifications[pid]) {
+      state.verifications[pid].status   = "marked-unverified";
+      state.verifications[pid].markedBy = state.profile.username || state.profile.name || "Unknown";
+      persistVerifications();
+      refreshVerifyBox(pid);
+    }
+  }
+
+  const manualVerify = event.target.closest("[data-manually-verify]");
+  if (manualVerify) {
+    const pid = manualVerify.dataset.manuallyVerify;
+    if (state.verifications[pid]) {
+      state.verifications[pid].status   = "manually-verified";
+      state.verifications[pid].markedBy = state.profile.username || state.profile.name || "Unknown";
+      persistVerifications();
+      refreshVerifyBox(pid);
+    }
+  }
+
+  const reverify = event.target.closest("[data-reverify]");
+  if (reverify) {
+    const pid = reverify.dataset.reverify;
+    if (state.verifications[pid]) {
+      state.verifications[pid].status   = "auto-verified";
+      state.verifications[pid].markedBy = null;
+      persistVerifications();
+      refreshVerifyBox(pid);
+    }
+  }
+
+  const unverifyManual = event.target.closest("[data-unverify-manual]");
+  if (unverifyManual) {
+    const pid = unverifyManual.dataset.unverifyManual;
+    if (state.verifications[pid]) {
+      state.verifications[pid].status   = "auto-unverified";
+      state.verifications[pid].markedBy = null;
+      persistVerifications();
+      refreshVerifyBox(pid);
+    }
+  }
+
+  const addNote = event.target.closest("[data-add-note]");
+  if (addNote) {
+    const editor = addNote.closest(".verify-wrapper")?.querySelector(`[data-note-editor="${addNote.dataset.addNote}"]`);
+    if (editor) editor.classList.remove("hidden");
+  }
+
+  const cancelNote = event.target.closest("[data-cancel-note]");
+  if (cancelNote) {
+    const editor = cancelNote.closest(".verify-wrapper")?.querySelector(`[data-note-editor="${cancelNote.dataset.cancelNote}"]`);
+    if (editor) editor.classList.add("hidden");
+  }
+
+  const saveNote = event.target.closest("[data-save-note]");
+  if (saveNote) {
+    const pid   = saveNote.dataset.saveNote;
+    const input = saveNote.closest(".verify-wrapper")?.querySelector(`[data-note-input="${pid}"]`);
+    if (input && state.verifications[pid]) {
+      state.verifications[pid].note = input.value.trim();
+      persistVerifications();
+      refreshVerifyBox(pid);
+    }
+  }
+
+  const editNote = event.target.closest("[data-edit-note]");
+  if (editNote && editNote.dataset.editNote) {
+    const pid    = editNote.dataset.editNote;
+    const wrapper = editNote.closest(".verify-wrapper");
+    const editor = wrapper?.querySelector(`[data-note-editor="${pid}"]`);
+    if (editor) {
+      editor.classList.remove("hidden");
+      const ta = wrapper?.querySelector(`[data-note-input="${pid}"]`);
+      if (ta) ta.value = state.verifications[pid]?.note || "";
+    }
+  }
+
+  const deleteNote = event.target.closest("[data-delete-note]");
+  if (deleteNote) {
+    const pid = deleteNote.dataset.deleteNote;
+    if (state.verifications[pid]) {
+      state.verifications[pid].note = "";
+      persistVerifications();
+      refreshVerifyBox(pid);
     }
   }
 

@@ -229,6 +229,7 @@ class PreprocessedText(TimestampMixin, db.Model):
     clean_text = db.Column(db.Text, nullable=True)
     tokens_json = db.Column(db.Text, nullable=False, default="[]")
     translated_text = db.Column(db.Text, nullable=True)
+    vader_text = db.Column(db.Text, nullable=True)
     translation_status = db.Column(db.String(32), nullable=False, default="skipped", index=True)
     negation_handled_tokens_json = db.Column(db.Text, nullable=False, default="[]")
     lemmatized_tokens_json = db.Column(db.Text, nullable=False, default="[]")

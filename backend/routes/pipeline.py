@@ -221,20 +221,20 @@ def run_all():
 
     # ── Step 6: VADER analyze-all ──────────────────────────────────────────────
     try:
-        clean_text_map = {
-            row.raw_id: row.clean_text
+        vader_text_map = {
+            row.raw_id: (row.vader_text or row.clean_text)
             for row in PreprocessedText.query
                 .filter(PreprocessedText.raw_id.in_(post_ids))
                 .filter_by(record_type="post")
                 .all()
-            if row.clean_text
+            if (row.vader_text or row.clean_text)
         }
         vader_inserted = vader_updated = 0
         for post_id in post_ids:
             post = posts_map.get(post_id)
             if not post:
                 continue
-            text = clean_text_map.get(post_id) or post.caption or ""
+            text = vader_text_map.get(post_id) or post.caption or ""
             result = analyze_post(text, post.cluster_id)
             existing = PostSentiment.query.filter_by(post_id=post_id).first()
             if existing:

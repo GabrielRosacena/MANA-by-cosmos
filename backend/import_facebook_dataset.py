@@ -214,12 +214,12 @@ def import_items(payload: list[dict]):
             new_posts = Post.query.filter(Post.id.in_(new_post_ids_set)).all()
 
             pt_lookup: dict[str, str] = {
-                row.raw_id: row.clean_text
+                row.raw_id: (row.vader_text or row.clean_text)
                 for row in PreprocessedText.query
                     .filter(PreprocessedText.raw_id.in_(new_post_ids_set))
                     .filter_by(record_type="post")
                     .all()
-                if row.clean_text
+                if (row.vader_text or row.clean_text)
             }
 
             for post in new_posts:

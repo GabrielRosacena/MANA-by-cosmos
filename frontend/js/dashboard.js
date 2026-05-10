@@ -84,7 +84,7 @@ function dashboardBarValue(value, total) {
 function buildDashboardSummary(posts, range, clusters) {
   const filtered = filterPosts(posts || [], range, "All");
   const totalPosts = filtered.length;
-  const highPriorityCount = filtered.filter(post => post.priority === "High" || post.priority === "Critical").length;
+  const highPriorityCount = filtered.filter(post => normalizePriority(post.priority) === "High").length;
   const facebookPosts = filtered.filter(post => post.source === "Facebook").length;
   const twitterPosts = filtered.filter(post => post.source === "X").length;
   const activeClusters = new Set(filtered.map(post => post.clusterId).filter(Boolean)).size;
@@ -150,6 +150,21 @@ function renderClusterNav() {
   `).join("");
 }
 
+// ─── Render: Priority Posts ───────────────────────────────────────────────────
+function renderPriorityPosts(priority) {
+  const filter = priority || document.getElementById("priorityFilter")?.value || "All";
+  const posts = filterPosts(state.posts, state.dashboardRange, "All")
+    .filter(p => filter === "All" || p.priority === filter)
+    .sort((a, b) => b.severityRank - a.severityRank || getEngagement(b) - getEngagement(a))
+    .slice(0, 8);
+  const feed = document.getElementById("priorityPostsFeed");
+  if (feed) {
+    feed.innerHTML = posts.length
+      ? renderPostCards(posts)
+      : `<div class="watch-empty"><strong>No posts match this priority.</strong></div>`;
+  }
+}
+
 // ─── Render: Dashboard ────────────────────────────────────────────────────────
 function renderDashboard() {
   const summaryCards = Array.isArray(state.dashboardSummary) && state.dashboardSummary.length
@@ -189,6 +204,8 @@ function renderDashboard() {
       <small>${formatNumber(toCount(c.likes))} likes · From post in ${c.location || "Philippines"}</small>
     </article>
   `).join("") || `<div class="watch-empty"><strong>No trending comments available.</strong>Import a Facebook comments dataset to populate this panel.</div>`;
+
+  renderPriorityPosts();
 }
 
 // ─── Render: Source Directory ─────────────────────────────────────────────────

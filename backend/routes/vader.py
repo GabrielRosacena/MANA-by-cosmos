@@ -85,14 +85,15 @@ def analyze_all():
             for ps in PostSentiment.query.filter(PostSentiment.post_id.in_(post_ids)).all()
         }
 
-    # Build clean_text lookup from preprocessed_texts (prefer translated + lemmatized text)
-    clean_text_map: dict[str, str] = {
-        row.raw_id: row.clean_text
+    # Build vader_text lookup — casing-preserved, translated English for VADER.
+    # Falls back to clean_text for rows preprocessed before vader_text was added.
+    vader_text_map: dict[str, str] = {
+        row.raw_id: (row.vader_text or row.clean_text)
         for row in PreprocessedText.query
             .filter(PreprocessedText.raw_id.in_(post_ids))
             .filter_by(record_type="post")
             .all()
-        if row.clean_text
+        if (row.vader_text or row.clean_text)
     }
 
     inserted = updated = skipped = 0
@@ -102,7 +103,7 @@ def analyze_all():
             skipped += 1
             continue
 
-        text   = clean_text_map.get(post.id) or post.caption or ""
+        text   = vader_text_map.get(post.id) or post.caption or ""
         result = analyze_post(text, post.cluster_id)
 
         existing = PostSentiment.query.filter_by(post_id=post.id).first()
@@ -152,8 +153,9 @@ def analyze_single(post_id: str):
     if not post:
         return jsonify({"error": f"Post {post_id!r} not found."}), 404
 
-    pt   = PreprocessedText.query.filter_by(raw_id=post_id, record_type="post").first()
-    text = (pt.clean_text if pt and pt.clean_text else None) or post.caption or ""
+    pt      = PreprocessedText.query.filter_by(raw_id=post_id, record_type="post").first()
+    vader_src = (pt.vader_text or pt.clean_text) if pt else None
+    text      = vader_src or post.caption or ""
 
     result   = analyze_post(text, post.cluster_id)
     existing = PostSentiment.query.filter_by(post_id=post_id).first()
