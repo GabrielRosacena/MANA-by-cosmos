@@ -12,7 +12,7 @@
 const SUPABASE_URL = "https://gizuoookwwkximbqvcpx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_cj0YjBeAVubMaZVOyYXNyQ_D0en0BF_";
 
-const API_BASE = "http://mana-backend-4s1w.onrender.com/api";
+const API_BASE = "https://mana-backend-4s1w.onrender.com/api";
 const USE_MOCK = false;
 
 // ─── JWT Helpers ──────────────────────────────────────────────────────────────
