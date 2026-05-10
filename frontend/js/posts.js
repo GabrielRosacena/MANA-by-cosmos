@@ -354,15 +354,18 @@ function renderVerifyBox(post) {
 
 // ─── Render: Watchlist ────────────────────────────────────────────────────────
 function renderWatchlist() {
-  const pinned = state.posts.filter(p => state.pinned.has(p.id)).sort(sortPostsByPriority);
+  const pinned = state.posts
+    .filter(p => state.pinned.has(p.id))
+    .filter(p => matchesPostSearch(p, state.globalSearch))
+    .sort(sortPostsByPriority);
   document.getElementById("watchlistGrid").innerHTML = pinned.length
     ? renderPostCards(pinned)
-    : `<div class="watch-empty"><strong>No saved intelligence yet.</strong>Use the pin control on any post card to send it here for prioritized watchlist review.</div>`;
+    : `<div class="watch-empty"><strong>${state.globalSearch ? "No pinned posts match the current search." : "No saved intelligence yet."}</strong>${state.globalSearch ? "Try a different keyword, post term, or location." : "Use the pin control on any post card to send it here for prioritized watchlist review."}</div>`;
 }
 
 // ─── Render: Alerts ───────────────────────────────────────────────────────────
 function renderAlerts() {
-  const filtered = filterPosts(state.posts, state.alerts.dateRange, state.alerts.source)
+  const filtered = filterPosts(state.posts, state.alerts.dateRange, state.alerts.source, state.globalSearch)
     .filter(p => p.priority === "High")
     .sort(sortPostsByPriority);
 
@@ -422,7 +425,7 @@ function renderClusterDetail() {
     </div>`;
 
   const f = state.clusterFilters;
-  const filteredPosts = filterPosts(clusterPosts, f.dateRange, f.source)
+  const filteredPosts = filterPosts(clusterPosts, f.dateRange, f.source, state.globalSearch)
     .filter(p => {
       if (f.severity === "High")   return normalizePriority(p.priority) === "High";
       if (f.severity === "Medium") return normalizePriority(p.priority) === "Medium";

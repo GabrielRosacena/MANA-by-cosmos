@@ -42,10 +42,54 @@ function matchesDateRange(postDate, range) {
   return true;
 }
 
-function filterPosts(sourcePosts, dateRange, source) {
+function normalizeSearchTerm(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getSearchTokens(value) {
+  return normalizeSearchTerm(value).split(/\s+/).filter(Boolean);
+}
+
+function matchesPostSearch(post, searchTerm) {
+  const tokens = getSearchTokens(searchTerm);
+  if (!tokens.length) return true;
+
+  const cluster = (state?.clusters || []).find(c => c.id === post.clusterId);
+  const haystack = [
+    post.caption,
+    post.location,
+    post.pageSource,
+    post.author,
+    post.source,
+    post.recommendation,
+    ...(Array.isArray(post.keywords) ? post.keywords : []),
+    cluster?.short,
+    cluster?.name,
+    cluster?.description,
+    ...(Array.isArray(cluster?.keywords) ? cluster.keywords : []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return tokens.every(token => haystack.includes(token));
+}
+
+function filterPosts(sourcePosts, dateRange, source, searchTerm = "") {
   return sourcePosts
     .filter(p => matchesDateRange(p.date, dateRange))
-    .filter(p => source === "All" ? true : p.source === source);
+    .filter(p => source === "All" ? true : p.source === source)
+    .filter(p => matchesPostSearch(p, searchTerm));
+}
+
+function filterKeywords(sourceKeywords, searchTerm = "") {
+  const tokens = getSearchTokens(searchTerm);
+  if (!tokens.length) return sourceKeywords;
+
+  return (sourceKeywords || []).filter(item => {
+    const haystack = [item.keyword, item.note].filter(Boolean).join(" ").toLowerCase();
+    return tokens.every(token => haystack.includes(token));
+  });
 }
 
 function sortPostsByPriority(a, b) {

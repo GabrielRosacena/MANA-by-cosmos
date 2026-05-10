@@ -402,6 +402,36 @@ def import_apify_dataset():
     return jsonify(result)
 
 
+@admin_bp.route("/apify/repair-post-metrics", methods=["POST"])
+@admin_required
+def repair_apify_post_metrics():
+    from import_facebook_dataset import refresh_post_metrics_from_payload
+
+    posts = Post.query.filter_by(source="Facebook").all()
+    scanned = repaired = skipped = 0
+
+    for post in posts:
+        scanned += 1
+        if refresh_post_metrics_from_payload(post):
+            repaired += 1
+        elif post.raw_payload_json:
+            skipped += 1
+
+    db.session.commit()
+    log_activity(
+        "Apify post metrics repaired",
+        f"Scanned {scanned} Facebook posts; repaired {repaired}",
+        "system",
+    )
+    db.session.commit()
+    return jsonify({
+        "message": "Facebook post metrics repaired from stored Apify payloads.",
+        "scanned": scanned,
+        "repaired": repaired,
+        "skipped": skipped,
+    })
+
+
 @admin_bp.route("/apify/webhook", methods=["POST"])
 def apify_webhook():
     payload = get_json()

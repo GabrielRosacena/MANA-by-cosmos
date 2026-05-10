@@ -88,6 +88,357 @@ CLUSTER_DEFINITIONS = [
 ]
 
 CLUSTER_MAP = {cluster["id"]: cluster for cluster in CLUSTER_DEFINITIONS}
+SCENARIO_RECOMMENDATIONS = [
+    {
+        "cluster_id": "cluster-a",
+        "priorities": {"HIGH"},
+        "match_terms": ["pagkain", "food", "evacuation center", "walang pagkain"],
+        "recommendation": (
+            "Coordinate with DSWD for immediate food pack deployment. Alert LGU and "
+            "partner NGOs for supplementary relief distribution. Prioritize families "
+            "with infants and elderly."
+        ),
+    },
+    {
+        "cluster_id": "cluster-a",
+        "priorities": {"MEDIUM"},
+        "match_terms": ["damit", "kumot", "blanket", "clothing", "hygiene"],
+        "recommendation": (
+            "Coordinate NFI distribution with DSWD and Red Cross. Pre-position "
+            "blankets, clothing, and hygiene kits to affected evacuation center."
+        ),
+    },
+    {
+        "cluster_id": "cluster-a",
+        "priorities": {"LOW"},
+        "match_terms": ["relief goods", "dumating", "sapat", "salamat"],
+        "recommendation": (
+            "Log successful relief distribution. Continue monitoring for additional "
+            "NFI needs. Assess remaining stock for next distribution cycle."
+        ),
+    },
+    {
+        "cluster_id": "cluster-b",
+        "priorities": {"CRITICAL"},
+        "match_terms": ["nasusuka", "nagtatae", "outbreak", "sakit na kumakalat", "diarrhea", "vomit"],
+        "recommendation": (
+            "Immediately dispatch DOH rapid response team. Isolate symptomatic "
+            "individuals. Coordinate water quality testing and sanitation intervention. "
+            "Alert RESU for disease outbreak investigation."
+        ),
+    },
+    {
+        "cluster_id": "cluster-b",
+        "priorities": {"HIGH"},
+        "match_terms": ["malinis na tubig", "cr", "toilet", "water", "sanitation"],
+        "recommendation": (
+            "Deploy water purification units and potable water trucks. Coordinate "
+            "with LWUA for emergency water supply. Mobilize sanitation team for "
+            "toilet facility augmentation."
+        ),
+    },
+    {
+        "cluster_id": "cluster-b",
+        "priorities": {"MEDIUM"},
+        "match_terms": ["bakuna", "vaccin", "immunization", "nahalkunahan"],
+        "recommendation": (
+            "Coordinate with DOH for mobile vaccination team deployment. Alert RHU "
+            "for supplementary immunization activity. Conduct health status profiling "
+            "of evacuees."
+        ),
+    },
+    {
+        "cluster_id": "cluster-c",
+        "priorities": {"HIGH"},
+        "match_terms": ["puno", "capacity", "hindi na makapasok", "overflow", "bagong dating"],
+        "recommendation": (
+            "Activate secondary evacuation sites. Coordinate transport of overflow "
+            "evacuees to alternate centers. Update evacuation center capacity "
+            "registry with MDRRMO."
+        ),
+    },
+    {
+        "cluster_id": "cluster-c",
+        "priorities": {"MEDIUM"},
+        "match_terms": ["nag-aaway", "crowd", "peacekeeping", "ayos"],
+        "recommendation": (
+            "Deploy barangay peacekeeping team and social workers to evacuation site. "
+            "Coordinate with PNP for crowd management support. Establish camp "
+            "management protocol."
+        ),
+    },
+    {
+        "cluster_id": "cluster-c",
+        "priorities": {"HIGH"},
+        "match_terms": ["bata", "magulang", "iisa", "child", "minor", "family tracing"],
+        "recommendation": (
+            "Immediately coordinate with DSWD for child protection intervention. "
+            "Deploy social workers for family tracing. Alert BCPC for unaccompanied "
+            "minor documentation and safeguarding."
+        ),
+    },
+    {
+        "cluster_id": "cluster-d",
+        "priorities": {"HIGH"},
+        "match_terms": ["relief truck", "kalsada", "road", "route", "baha"],
+        "recommendation": (
+            "Coordinate with DPWH for alternate route assessment. Deploy amphibious "
+            "or boat transport for relief delivery. Alert MDRRMO logistics team for "
+            "rerouting plan."
+        ),
+    },
+    {
+        "cluster_id": "cluster-d",
+        "priorities": {"CRITICAL"},
+        "match_terms": ["kulang ang sasakyan", "evacuation", "transport assets", "hindi pa nakakaalis"],
+        "recommendation": (
+            "Immediately mobilize all available LGU vehicles and coordinate with DOTC "
+            "for additional transport assets. Request mutual aid from adjacent LGUs. "
+            "Prioritize evacuation of vulnerable groups."
+        ),
+    },
+    {
+        "cluster_id": "cluster-d",
+        "priorities": {"HIGH"},
+        "match_terms": ["fuel", "rescue boat", "vessel", "operasyon"],
+        "recommendation": (
+            "Dispatch fuel supply team to reported coordinates. Coordinate with Coast "
+            "Guard for backup vessel deployment. Alert rescue operations commander of "
+            "operational delay."
+        ),
+    },
+    {
+        "cluster_id": "cluster-e",
+        "priorities": {"HIGH"},
+        "match_terms": ["walang signal", "signal", "makakontak", "network"],
+        "recommendation": (
+            "Coordinate with DICT for deployment of emergency satellite communication "
+            "unit. Alert TELCO providers for priority signal restoration. Activate "
+            "amateur radio network for backup communication."
+        ),
+    },
+    {
+        "cluster_id": "cluster-e",
+        "priorities": {"MEDIUM"},
+        "match_terms": ["hotline", "tumatawag", "sumasagot", "contact numbers"],
+        "recommendation": (
+            "Investigate MDRRMO hotline system status. Activate secondary communication "
+            "channels. Post alternate contact numbers on official LGU social media "
+            "pages immediately."
+        ),
+    },
+    {
+        "cluster_id": "cluster-e",
+        "priorities": {"LOW"},
+        "match_terms": ["naibalik", "restoration", "signal", "makipag-ugnayan"],
+        "recommendation": (
+            "Log restoration of communication in affected area. Continue monitoring "
+            "for remaining communication gaps in adjacent barangays."
+        ),
+    },
+    {
+        "cluster_id": "cluster-f",
+        "priorities": {"MEDIUM"},
+        "match_terms": ["evacuation center", "makakabalik sa klase", "school facility", "learning spaces"],
+        "recommendation": (
+            "Coordinate with DepEd for school facility assessment and timeline for "
+            "resumption. Identify alternative learning spaces. Alert DepEd Division "
+            "Office for temporary learning modality activation."
+        ),
+    },
+    {
+        "cluster_id": "cluster-f",
+        "priorities": {"MEDIUM"},
+        "match_terms": ["libro", "kagamitan", "materials", "nasira", "baha"],
+        "recommendation": (
+            "Coordinate with DepEd and partner NGOs for emergency learning materials "
+            "replacement. Submit rapid school damage assessment to MDRRMO and DepEd "
+            "Division Office."
+        ),
+    },
+    {
+        "cluster_id": "cluster-f",
+        "priorities": {"MEDIUM"},
+        "match_terms": ["takot", "panic", "lindol", "psychosocial", "mhpss"],
+        "recommendation": (
+            "Coordinate with DepEd and DSWD for deployment of psychosocial support "
+            "team. Conduct school-based MHPSS sessions before class resumption."
+        ),
+    },
+    {
+        "cluster_id": "cluster-g",
+        "priorities": {"HIGH"},
+        "match_terms": ["baha", "natrap", "trapped", "water rescue", "hindi makalabas"],
+        "recommendation": (
+            "Deploy Search and Rescue units. Coordinate with MDRRMO and Coast Guard "
+            "for water rescue operations. Report exact location to rescue operations "
+            "commander."
+        ),
+    },
+    {
+        "cluster_id": "cluster-g",
+        "priorities": {"CRITICAL"},
+        "match_terms": ["gumuho", "collapse", "rescue ngayon", "nalipit", "usar"],
+        "recommendation": (
+            "Immediately dispatch Urban Search and Rescue (USAR) team. Coordinate "
+            "with BFP and MDRRMO for structural collapse rescue protocol. Alert "
+            "nearest hospital for trauma care standby."
+        ),
+    },
+    {
+        "cluster_id": "cluster-g",
+        "priorities": {"LOW"},
+        "match_terms": ["narescue na", "walang casualty", "completed rescue"],
+        "recommendation": (
+            "Log completed rescue operation. Document number of rescued individuals. "
+            "Continue area monitoring for additional rescue requests."
+        ),
+    },
+    {
+        "cluster_id": "cluster-h",
+        "priorities": {"HIGH"},
+        "match_terms": ["bangkay", "body", "retrieval", "identification"],
+        "recommendation": (
+            "Coordinate with PNP and NBI for body retrieval and identification. "
+            "Notify MDRRMO for incident documentation. Alert barangay officials for "
+            "missing persons cross-referencing."
+        ),
+    },
+    {
+        "cluster_id": "cluster-h",
+        "priorities": {"MEDIUM"},
+        "match_terms": ["wala pa ring balita", "missing", "hospital admission", "evacuation center registries"],
+        "recommendation": (
+            "Register reported missing person with MDRRMO and PNP. Coordinate with "
+            "barangay officials for local search. Cross-reference with evacuation "
+            "center registries and hospital admission records."
+        ),
+    },
+    {
+        "cluster_id": "cluster-h",
+        "priorities": {"CRITICAL"},
+        "match_terms": ["maraming patay", "mass casualty", "landslide", "nawawala"],
+        "recommendation": (
+            "Immediately activate MDM protocol. Coordinate with PNP-SOCO, NBI, and "
+            "MDRRMO for mass casualty management. Establish ante-mortem data "
+            "collection. Alert NDRRMC for incident escalation report."
+        ),
+    },
+]
+EXCEL_RECOMMENDATIONS = {
+    "cluster-a": {
+        "HIGH": (
+            "Coordinate with DSWD for immediate food pack deployment. Alert LGU and "
+            "partner NGOs for supplementary relief distribution. Prioritize families "
+            "with infants and elderly."
+        ),
+        "MEDIUM": (
+            "Coordinate NFI distribution with DSWD and Red Cross. Pre-position "
+            "blankets, clothing, and hygiene kits to affected evacuation center."
+        ),
+        "LOW": (
+            "Log successful relief distribution. Continue monitoring for additional "
+            "NFI needs. Assess remaining stock for next distribution cycle."
+        ),
+    },
+    "cluster-b": {
+        "CRITICAL": (
+            "Immediately dispatch DOH rapid response team. Isolate symptomatic "
+            "individuals. Coordinate water quality testing and sanitation intervention. "
+            "Alert RESU for disease outbreak investigation."
+        ),
+        "HIGH": (
+            "Deploy water purification units and potable water trucks. Coordinate "
+            "with LWUA for emergency water supply. Mobilize sanitation team for "
+            "toilet facility augmentation."
+        ),
+        "MEDIUM": (
+            "Coordinate with DOH for mobile vaccination team deployment. Alert RHU "
+            "for supplementary immunization activity. Conduct health status profiling "
+            "of evacuees."
+        ),
+    },
+    "cluster-c": {
+        "HIGH": (
+            "Activate secondary evacuation sites. Coordinate transport of overflow "
+            "evacuees to alternate centers. Update evacuation center capacity "
+            "registry with MDRRMO."
+        ),
+        "MEDIUM": (
+            "Deploy barangay peacekeeping team and social workers to evacuation site. "
+            "Coordinate with PNP for crowd management support. Establish camp "
+            "management protocol."
+        ),
+    },
+    "cluster-d": {
+        "CRITICAL": (
+            "Immediately mobilize all available LGU vehicles and coordinate with DOTC "
+            "for additional transport assets. Request mutual aid from adjacent LGUs. "
+            "Prioritize evacuation of vulnerable groups."
+        ),
+        "HIGH": (
+            "Coordinate with DPWH for alternate route assessment. Deploy amphibious "
+            "or boat transport for relief delivery. Alert MDRRMO logistics team for "
+            "rerouting plan."
+        ),
+    },
+    "cluster-e": {
+        "HIGH": (
+            "Coordinate with DICT for deployment of emergency satellite communication "
+            "unit. Alert TELCO providers for priority signal restoration. Activate "
+            "amateur radio network for backup communication."
+        ),
+        "MEDIUM": (
+            "Investigate MDRRMO hotline system status. Activate secondary communication "
+            "channels. Post alternate contact numbers on official LGU social media "
+            "pages immediately."
+        ),
+        "LOW": (
+            "Log restoration of communication in affected area. Continue monitoring "
+            "for remaining communication gaps in adjacent barangays."
+        ),
+    },
+    "cluster-f": {
+        "MEDIUM": (
+            "Coordinate with DepEd for school facility assessment and timeline for "
+            "resumption. Identify alternative learning spaces. Alert DepEd Division "
+            "Office for temporary learning modality activation."
+        ),
+    },
+    "cluster-g": {
+        "CRITICAL": (
+            "Immediately dispatch Urban Search and Rescue (USAR) team. Coordinate "
+            "with BFP and MDRRMO for structural collapse rescue protocol. Alert "
+            "nearest hospital for trauma care standby."
+        ),
+        "HIGH": (
+            "Deploy Search and Rescue units. Coordinate with MDRRMO and Coast Guard "
+            "for water rescue operations. Report exact location to rescue operations "
+            "commander."
+        ),
+        "LOW": (
+            "Log completed rescue operation. Document number of rescued individuals. "
+            "Continue area monitoring for additional rescue requests."
+        ),
+    },
+    "cluster-h": {
+        "CRITICAL": (
+            "Immediately activate MDM protocol. Coordinate with PNP-SOCO, NBI, and "
+            "MDRRMO for mass casualty management. Establish ante-mortem data "
+            "collection. Alert NDRRMC for incident escalation report."
+        ),
+        "HIGH": (
+            "Coordinate with PNP and NBI for body retrieval and identification. "
+            "Notify MDRRMO for incident documentation. Alert barangay officials for "
+            "missing persons cross-referencing."
+        ),
+        "MEDIUM": (
+            "Register reported missing person with MDRRMO and PNP. Coordinate with "
+            "barangay officials for local search. Cross-reference with evacuation "
+            "center registries and hospital admission records."
+        ),
+    },
+}
 CLUSTER_SIGNAL_TERMS = {
     "cluster-a": {
         "relief goods", "food pack", "rice", "bigas", "pagkain", "tubig", "water", "drinking water", "blanket",
@@ -274,7 +625,44 @@ def extract_location(text: str):
     return "Philippines"
 
 
-def recommendation_for(cluster_id: str, priority: str):
+def normalize_recommendation_priority(priority: str) -> str:
+    return {
+        "Critical": "CRITICAL",
+        "High": "HIGH",
+        "Moderate": "MEDIUM",
+        "Medium": "MEDIUM",
+        "Monitoring": "LOW",
+        "Low": "LOW",
+    }.get((priority or "").strip(), "MEDIUM")
+
+
+def recommendation_for(cluster_id: str, priority: str, text: str | None = None):
+    normalized = normalize_recommendation_priority(priority)
+    lower_text = (text or "").lower()
+
+    for scenario in SCENARIO_RECOMMENDATIONS:
+        if scenario["cluster_id"] != cluster_id:
+            continue
+        if normalized not in scenario["priorities"]:
+            continue
+        if lower_text and any(term in lower_text for term in scenario["match_terms"]):
+            return scenario["recommendation"]
+
+    cluster_recommendations = EXCEL_RECOMMENDATIONS.get(cluster_id, {})
+
+    if normalized in cluster_recommendations:
+        return cluster_recommendations[normalized]
+
+    fallback_order = {
+        "CRITICAL": ["HIGH", "MEDIUM", "LOW"],
+        "HIGH": ["CRITICAL", "MEDIUM", "LOW"],
+        "MEDIUM": ["HIGH", "LOW", "CRITICAL"],
+        "LOW": ["MEDIUM", "HIGH", "CRITICAL"],
+    }
+    for candidate in fallback_order.get(normalized, ["MEDIUM", "HIGH", "LOW", "CRITICAL"]):
+        if candidate in cluster_recommendations:
+            return cluster_recommendations[candidate]
+
     base = CLUSTER_MAP[cluster_id]["recommendation"]
     if priority == "Critical":
         return base.replace("Coordinate", "Immediately coordinate").replace("Dispatch", "Immediately dispatch")

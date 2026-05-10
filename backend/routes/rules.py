@@ -15,10 +15,35 @@ from collections import defaultdict
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 
+from data import recommendation_for
 from models import Post, PostSentiment, db
 from services.rules.decision_engine import evaluate, list_rules
 
 rules_bp = Blueprint("rules", __name__)
+
+
+CRITICAL_RULE_IDS = {
+    "R-A1",
+    "R-B1",
+    "R-C1",
+    "R-D1",
+    "R-E1",
+    "R-F1",
+    "R-G1",
+    "R-H1",
+    "R-VOL",
+}
+
+
+def recommendation_from_pdf(cluster_id: str, rule_id: str, fallback_priority: str = "Moderate") -> str:
+    """
+    Return the validated cluster recommendation text used across Apify imports.
+
+    Rule evaluation still decides whether a post is urgent; this helper keeps the
+    visible recommendation aligned with the PDF-backed wording per cluster.
+    """
+    priority = "Critical" if rule_id in CRITICAL_RULE_IDS else fallback_priority
+    return recommendation_for(cluster_id, priority)
 
 
 # ── GET /rules/list ───────────────────────────────────────────────────────────
@@ -52,6 +77,12 @@ def evaluate_single():
         return jsonify({"error": "cluster_id is required"}), 400
 
     result = evaluate(cluster_id, neg_pct, post_count)
+    result["rule_recommendation"] = result["recommendation"]
+    result["recommendation"] = recommendation_for(
+        cluster_id,
+        "Critical" if result["rule_id"] in CRITICAL_RULE_IDS else "Moderate",
+        body.get("text", ""),
+    )
     return jsonify(result), 200
 
 
@@ -97,7 +128,15 @@ def evaluate_all():
             post_count = cluster_counts[cluster_id]
             result = evaluate(cluster_id, neg_pct, post_count)
 
-            post.recommendation = result["recommendation"]
+            post.recommendation = recommendation_from_pdf(
+                cluster_id,
+                result["rule_id"],
+                fallback_priority=post.priority or "Moderate",
+            ) if not post.caption else recommendation_for(
+                cluster_id,
+                "Critical" if result["rule_id"] in CRITICAL_RULE_IDS else (post.priority or "Moderate"),
+                post.caption,
+            )
             evaluated += 1
 
         except Exception:

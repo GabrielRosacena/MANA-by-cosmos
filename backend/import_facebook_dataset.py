@@ -34,6 +34,67 @@ from services.svm.cluster_classifier import (
 )
 
 
+def safe_int(value):
+    try:
+        return int(float(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+REACTION_COUNT_FIELDS = (
+    "reactionLikeCount",
+    "reactionLoveCount",
+    "reactionCareCount",
+    "reactionHahaCount",
+    "reactionWowCount",
+    "reactionSadCount",
+    "reactionAngryCount",
+)
+
+
+def extract_reaction_totals(item: dict) -> tuple[int, int]:
+    """
+    Return (total_reactions, like_reactions) from the real Apify post payload.
+
+    In exported Facebook Posts Scraper data, `topReactionsCount` is often just the
+    count of the visible top reaction summary, not the total reactions on the post.
+    The accurate totals come from the per-reaction fields when present.
+    """
+    reaction_breakdown = {field: safe_int(item.get(field)) for field in REACTION_COUNT_FIELDS}
+    breakdown_total = sum(reaction_breakdown.values())
+    fallback_total = safe_int(item.get("likes")) or safe_int(item.get("topReactionsCount"))
+    total_reactions = breakdown_total or fallback_total
+    like_reactions = reaction_breakdown["reactionLikeCount"] or fallback_total
+    return total_reactions, like_reactions
+
+
+def metrics_from_item(item: dict) -> dict:
+    reactions, like_reactions = extract_reaction_totals(item)
+    return {
+        "reactions": reactions,
+        "likes": like_reactions,
+        "shares": safe_int(item.get("shares")),
+        "comments": safe_int(item.get("comments")),
+        "views": safe_int(item.get("viewsCount")),
+    }
+
+
+def refresh_post_metrics_from_payload(post: Post) -> bool:
+    if not post.raw_payload_json:
+        return False
+    try:
+        item = json.loads(post.raw_payload_json)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return False
+    metrics = metrics_from_item(item)
+    changed = False
+    for field, value in metrics.items():
+        if getattr(post, field) != value:
+            setattr(post, field, value)
+            changed = True
+    return changed
+
+
 def parse_iso_datetime(value: str):
     if not value:
         return datetime.now(timezone.utc)
@@ -43,7 +104,12 @@ def parse_iso_datetime(value: str):
 def normalize_item(item: dict):
     text = (item.get("text") or item.get("caption") or item.get("content") or "").strip()
     cluster, keywords = infer_cluster(text)
-    engagement = int(item.get("likes") or 0) + int(item.get("comments") or 0) + int(item.get("shares") or 0)
+    metrics = metrics_from_item(item)
+    reactions = metrics["reactions"]
+    like_reactions = metrics["likes"]
+    shares = metrics["shares"]
+    comments = metrics["comments"]
+    engagement = reactions + comments + shares
     priority = infer_priority(text, engagement)
     sentiment_score = infer_sentiment_score(text, engagement)
 
@@ -57,16 +123,16 @@ def normalize_item(item: dict):
         "caption": text,
         "source_url": item.get("url") or item.get("topLevelUrl") or item.get("facebookUrl"),
         "external_id": str(item.get("postId") or ""),
-        "reactions": int(item.get("topReactionsCount") or item.get("likes") or 0),
-        "shares": int(item.get("shares") or 0),
-        "likes": int(item.get("likes") or 0),
+        "reactions": reactions,
+        "shares": shares,
+        "likes": like_reactions,
         "reposts": 0,
-        "comments": int(item.get("comments") or 0),
-        "views": int(item.get("viewsCount") or 0),
+        "comments": comments,
+        "views": metrics["views"],
         "media_type": media_type_for(item),
         "priority": priority,
         "sentiment_score": sentiment_score,
-        "recommendation": recommendation_for(cluster["id"], priority),
+        "recommendation": recommendation_for(cluster["id"], priority, text),
         "status": "Monitoring",
         "cluster_id": cluster["id"],
         "cluster_label_source": "heuristic",

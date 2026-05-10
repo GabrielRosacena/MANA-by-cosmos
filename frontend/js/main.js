@@ -27,6 +27,7 @@ const state = {
   alerts:           { dateRange: "3d", source: "All" },
   clusterFilters:   { source: "All", severity: "Trending", dateRange: "7d" },
   analyticsRange:   "14d",
+  globalSearch:     "",
 
   // User state
   pinned:        new Set(),
@@ -202,6 +203,21 @@ function bindStaticControls() {
   document.getElementById("clusterSourceFilter").addEventListener("change",   e => { state.clusterFilters.source   = e.target.value; renderClusterDetail(); });
   document.getElementById("clusterSeverityFilter").addEventListener("change", e => { state.clusterFilters.severity = e.target.value; renderClusterDetail(); });
   document.getElementById("clusterDateFilter").addEventListener("change",     e => { state.clusterFilters.dateRange= e.target.value; renderClusterDetail(); });
+
+  const globalSearch = document.getElementById("globalSearch");
+  const applyGlobalSearch = value => {
+    state.globalSearch = value;
+    state.dashboardSummary = buildDashboardSummary(state.posts, state.dashboardRange, state.clusters);
+    renderDashboard();
+    renderSourceDirectory();
+    renderAlerts();
+    renderWatchlist();
+    renderClusterDetail();
+  };
+
+  globalSearch.addEventListener("input", e => applyGlobalSearch(e.target.value));
+  globalSearch.addEventListener("search", e => applyGlobalSearch(e.target.value));
+  document.querySelector(".search-btn")?.addEventListener("click", () => applyGlobalSearch(globalSearch.value));
 
   document.getElementById("themeCheckbox").addEventListener("change", e => applyTheme(e.target.checked ? "dark" : "light"));
 

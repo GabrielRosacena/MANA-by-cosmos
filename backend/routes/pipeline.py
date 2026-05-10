@@ -303,7 +303,7 @@ def run_all():
             post.priority      = label
             post.severity_rank = SEVERITY_MAP.get(label, 2)
             post.recommendation = recommendation_for(
-                post.cluster_id, _RF_TO_REC_PRIORITY.get(label, "Moderate")
+                post.cluster_id, _RF_TO_REC_PRIORITY.get(label, "Moderate"), post.caption
             )
             existing = PostPriority.query.filter_by(post_id=pid).first()
             if existing:

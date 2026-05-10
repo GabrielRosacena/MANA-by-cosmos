@@ -82,7 +82,7 @@ function dashboardBarValue(value, total) {
 }
 
 function buildDashboardSummary(posts, range, clusters) {
-  const filtered = filterPosts(posts || [], range, "All");
+  const filtered = filterPosts(posts || [], range, "All", state.globalSearch);
   const totalPosts = filtered.length;
   const highPriorityCount = filtered.filter(post => normalizePriority(post.priority) === "High").length;
   const facebookPosts = filtered.filter(post => post.source === "Facebook").length;
@@ -126,7 +126,7 @@ function buildDashboardSummary(posts, range, clusters) {
 }
 
 function buildMockDashboardComments(posts, range) {
-  return filterPosts(posts || [], range, "All")
+  return filterPosts(posts || [], range, "All", state.globalSearch)
     .filter(post => Array.isArray(post.topComments))
     .flatMap(post => post.topComments.map(comment => ({
       ...comment,
@@ -153,7 +153,7 @@ function renderClusterNav() {
 // ─── Render: Priority Posts ───────────────────────────────────────────────────
 function renderPriorityPosts(priority) {
   const filter = priority || document.getElementById("priorityFilter")?.value || "All";
-  const posts = filterPosts(state.posts, state.dashboardRange, "All")
+  const posts = filterPosts(state.posts, state.dashboardRange, "All", state.globalSearch)
     .filter(p => filter === "All" || p.priority === filter)
     .sort((a, b) => b.severityRank - a.severityRank || getEngagement(b) - getEngagement(a))
     .slice(0, 8);
@@ -180,14 +180,14 @@ function renderDashboard() {
     </div>
   `).join("");
 
-  document.getElementById("keywordGrid").innerHTML = state.keywords.map(item => `
+  document.getElementById("keywordGrid").innerHTML = filterKeywords(state.keywords, state.globalSearch).map(item => `
     <div class="keyword-chip">
       <div><strong>${item.keyword}</strong><span>${item.note}</span></div>
       <strong>${formatNumber(item.count)}</strong>
     </div>
-  `).join("");
+  `).join("") || `<div class="watch-empty"><strong>No keywords match the current search.</strong></div>`;
 
-  const trendingPosts = filterPosts(state.posts, state.dashboardRange, "All")
+  const trendingPosts = filterPosts(state.posts, state.dashboardRange, "All", state.globalSearch)
     .sort((a, b) => (b.severityRank * 1000 + getEngagement(b)) - (a.severityRank * 1000 + getEngagement(a)))
     .slice(0, 4);
   document.getElementById("dashboardPosts").innerHTML = renderPostCards(trendingPosts);
@@ -211,7 +211,7 @@ function renderDashboard() {
 // ─── Render: Source Directory ─────────────────────────────────────────────────
 function renderSourceDirectory() {
   const sources = [...new Map(
-    filterPosts(state.posts, state.dashboardRange, "All").map(p => [p.pageSource, p])
+    filterPosts(state.posts, state.dashboardRange, "All", state.globalSearch).map(p => [p.pageSource, p])
   ).values()].slice(0, 8);
 
   document.getElementById("sourceDirectory").innerHTML = sources.map(post => `
@@ -222,7 +222,7 @@ function renderSourceDirectory() {
       </div>
       <div class="source-count">${formatCompact(getEngagement(post))} interactions</div>
     </div>
-  `).join("");
+  `).join("") || `<div class="watch-empty"><strong>No sources match the current search.</strong></div>`;
 }
 
 // ─── Render: Profile Settings ─────────────────────────────────────────────────
