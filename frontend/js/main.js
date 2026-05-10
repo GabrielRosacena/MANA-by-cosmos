@@ -266,7 +266,14 @@ function handleDocumentClick(event) {
 
   const openPost = event.target.closest("[data-open-post]");
   if (openPost) {
-    showToast("Post link unavailable", "Direct post URLs are not stored in the current dataset.");
+    const post = state.posts.find(p => p.id === openPost.dataset.openPost);
+    const sourceUrl = String(post?.sourceUrl || "").trim();
+
+    if (sourceUrl && /^https?:\/\//i.test(sourceUrl)) {
+      window.open(sourceUrl, "_blank", "noopener,noreferrer");
+    } else {
+      showToast("Post link unavailable", "This post does not currently have a valid source URL.");
+    }
   }
 
   if (commentToggle) {
