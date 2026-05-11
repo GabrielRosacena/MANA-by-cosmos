@@ -130,9 +130,10 @@ async function handleLogin(event) {
       localStorage.removeItem("mana-session");
     }
 
-    if (appBootPromise) await appBootPromise;
     renderProfileSettings();
     showApp();
+    renderAll();
+    loadCriticalAppData().then(() => loadDeferredAppData()).catch(() => {});
     showToast("Authenticated", "MANA is now ready for dashboard monitoring.");
   } catch (err) {
     showToast("Sign-in failed", err.message || "Invalid credentials. Please try again.");
@@ -150,6 +151,7 @@ async function doLogout() {
   await AuthService.logout().catch(() => {});
   localStorage.removeItem("mana-session");
   sessionStorage.removeItem("mana-active-session");
+  resetDeferredState();
   showAuthView();
   document.body.classList.remove("sidebar-open", "sidebar-collapsed");
   showToast("Logged out", "You have been signed out of MANA.");
@@ -211,6 +213,8 @@ async function checkRememberedSession() {
     }
     renderProfileSettings();
     showApp();
+    renderAll();
+    loadCriticalAppData().then(() => loadDeferredAppData()).catch(() => {});
   } catch (err) {
     if (getToken() !== sessionToken) return;
     localStorage.removeItem("mana-session");

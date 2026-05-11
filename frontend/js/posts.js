@@ -108,7 +108,7 @@ async function apiGetKeywords()        { const d = await apiFetch("/dashboard/ke
 // ─── DataService shim ─────────────────────────────────────────────────────────
 const PostsService = {
   async getPosts()      { return USE_MOCK ? MOCK_POSTS    : apiGetPosts(); },
-  async getWatchlist()  { return USE_MOCK ? { pinned:["p1","p3","p9"] } : { pinned: [] }; },
+  async getWatchlist()  { return USE_MOCK ? { pinned:["p1","p3","p9"] } : apiGetWatchlist(); },
   async getKeywords()   { return USE_MOCK ? MOCK_KEYWORDS : apiGetKeywords(); },
 
   async pinPost(postId) {

@@ -54,9 +54,17 @@ const ChartsService = {
 
 // ─── Render: Full Analytics Page ──────────────────────────────────────────────
 function renderAnalytics() {
-  const analytics = state.analytics && state.analytics.histogram
-    ? state.analytics
-    : (MOCK_ANALYTICS[state.analyticsRange] || MOCK_ANALYTICS["14d"]);
+  if (!state.analytics?.histogram?.length) {
+    const loadingMarkup = `<div class="watch-empty"><strong>${state.loading.analytics ? "Loading analytics..." : "Analytics will load when this page is opened."}</strong></div>`;
+    document.getElementById("sentimentHistogram").innerHTML = loadingMarkup;
+    document.getElementById("sentimentTrendLegend").innerHTML = "";
+    document.getElementById("sentimentTrendChart").innerHTML = loadingMarkup;
+    document.getElementById("clusterActivityChart").innerHTML = loadingMarkup;
+    document.getElementById("priorityDistributionChart").innerHTML = loadingMarkup;
+    return;
+  }
+
+  const analytics = state.analytics;
 
   renderSentimentHistogram(analytics.histogram);
   renderSentimentTrend(analytics.trend);

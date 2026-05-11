@@ -15,6 +15,8 @@ const state = {
   dashboardSummary: [],
   dashboardComments: [],
   analytics:        {},
+  dashboardCommentsRange: null,
+  analyticsLoadedRange:   null,
 
   // UI state
   currentPage:      "dashboard",
@@ -35,6 +37,20 @@ const state = {
   verifications: {},
   profile:       { username: "admin_mana", role: "LGU Analyst", email: "lgu.analyst@mana.ph" },
   emailAlerts:   true,
+  loading: {
+    criticalData: false,
+    keywords: false,
+    dashboardComments: false,
+    analytics: false,
+    watchlist: false,
+  },
+  loaded: {
+    criticalData: false,
+    keywords: false,
+    dashboardComments: false,
+    analytics: false,
+    watchlist: false,
+  },
 };
 
 const pageTitles = {
@@ -47,6 +63,34 @@ const pageTitles = {
 };
 
 let appBootPromise = null;
+let criticalDataPromise = null;
+let deferredDataPromise = null;
+
+function resetDeferredState() {
+  criticalDataPromise = null;
+  deferredDataPromise = null;
+  state.loaded.criticalData = false;
+  state.loaded.keywords = false;
+  state.loaded.dashboardComments = false;
+  state.loaded.analytics = false;
+  state.loaded.watchlist = false;
+  state.loading.criticalData = false;
+  state.loading.keywords = false;
+  state.loading.dashboardComments = false;
+  state.loading.analytics = false;
+  state.loading.watchlist = false;
+  state.dashboardCommentsRange = null;
+  state.analyticsLoadedRange = null;
+  state.clusters = [];
+  state.posts = [];
+  state.keywords = [];
+  state.dashboardSummary = [];
+  state.dashboardComments = [];
+  state.analytics = {};
+  state.statuses = {};
+  state.verifications = {};
+  state.pinned = new Set();
+}
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
@@ -59,51 +103,132 @@ async function init() {
     bindStaticControls();
     updateClock();
     await checkRememberedSession();
-    await loadAppData();
-    renderClusterNav();
-    renderAll();
   })();
 
   return appBootPromise;
 }
 
-async function loadAppData() {
-  try {
-    const [clusters, posts, watchlist, keywords, dashboardComments] = await Promise.all([
-      DashboardService.getClusters(),
-      PostsService.getPosts(),
-      PostsService.getWatchlist(),
-      PostsService.getKeywords(),
-      DashboardService.getDashboardComments(state.dashboardRange).catch(() => []),
-    ]);
+async function loadCriticalAppData() {
+  if (criticalDataPromise) return criticalDataPromise;
 
-    state.clusters = clusters;
-    state.posts    = posts.map(post => ({
-      ...post,
-      reactions: toCount(post.reactions),
-      shares: toCount(post.shares),
-      likes: toCount(post.likes),
-      reposts: toCount(post.reposts),
-      comments: toCount(post.comments),
-      views: toCount(post.views),
-    }));
-    state.pinned   = new Set(watchlist.pinned || []);
-    state.keywords = keywords;
-    state.dashboardComments = dashboardComments;
-    state.statuses = Object.fromEntries(state.posts.map(p => [p.id, p.status]));
+  state.loading.criticalData = true;
+  criticalDataPromise = (async () => {
+    try {
+      const [clusters, posts] = await Promise.all([
+        DashboardService.getClusters(),
+        PostsService.getPosts(),
+      ]);
 
-    // In mock mode, restore any locally-saved status overrides
-    if (USE_MOCK) {
-      const saved = localStorage.getItem("mana-statuses");
-      if (saved) state.statuses = { ...state.statuses, ...JSON.parse(saved) };
+      state.clusters = clusters;
+      state.posts    = posts.map(post => ({
+        ...post,
+        reactions: toCount(post.reactions),
+        shares: toCount(post.shares),
+        likes: toCount(post.likes),
+        reposts: toCount(post.reposts),
+        comments: toCount(post.comments),
+        views: toCount(post.views),
+      }));
+      state.statuses = Object.fromEntries(state.posts.map(p => [p.id, p.status]));
+
+      if (USE_MOCK) {
+        const saved = localStorage.getItem("mana-statuses");
+        if (saved) state.statuses = { ...state.statuses, ...JSON.parse(saved) };
+      }
+
+      state.dashboardSummary = buildDashboardSummary(state.posts, state.dashboardRange, state.clusters);
+      initVerifications(state.posts);
+      state.loaded.criticalData = true;
+
+      renderClusterNav();
+      renderCurrentPage({ refreshDashboardSummary: false });
+    } catch (err) {
+      console.error("Critical data load failed:", err);
+      showToast("Data load error", err.message || "Could not load data. Check backend connection.");
+      throw err;
+    } finally {
+      state.loading.criticalData = false;
     }
+  })();
 
-    state.analytics        = await ChartsService.getAnalytics(state.analyticsRange);
-    state.dashboardSummary = buildDashboardSummary(state.posts, state.dashboardRange, state.clusters);
-    initVerifications(state.posts);
+  return criticalDataPromise;
+}
+
+async function loadDeferredAppData() {
+  if (deferredDataPromise) return deferredDataPromise;
+
+  deferredDataPromise = (async () => {
+    await Promise.allSettled([
+      loadKeywords(),
+      loadDashboardComments(state.dashboardRange),
+      loadWatchlist(),
+      loadAnalytics(state.analyticsRange),
+    ]);
+  })();
+
+  return deferredDataPromise;
+}
+
+async function loadKeywords() {
+  if (state.loaded.keywords || state.loading.keywords) return state.keywords;
+
+  state.loading.keywords = true;
+  try {
+    state.keywords = await PostsService.getKeywords();
+    state.loaded.keywords = true;
+    if (state.currentPage === "dashboard") renderDashboard();
   } catch (err) {
-    console.error("Data load failed:", err);
-    showToast("Data load error", err.message || "Could not load data. Check backend connection.");
+    console.warn("Keyword load failed:", err);
+  } finally {
+    state.loading.keywords = false;
+  }
+}
+
+async function loadDashboardComments(range = state.dashboardRange) {
+  if (state.loading.dashboardComments) return state.dashboardComments;
+  if (state.loaded.dashboardComments && state.dashboardCommentsRange === range) return state.dashboardComments;
+
+  state.loading.dashboardComments = true;
+  try {
+    state.dashboardComments = await DashboardService.getDashboardComments(range).catch(() => []);
+    state.loaded.dashboardComments = true;
+    state.dashboardCommentsRange = range;
+    if (state.currentPage === "dashboard") renderDashboard();
+  } finally {
+    state.loading.dashboardComments = false;
+  }
+}
+
+async function loadAnalytics(range = state.analyticsRange) {
+  if (state.loading.analytics) return state.analytics;
+  if (state.loaded.analytics && state.analyticsLoadedRange === range) return state.analytics;
+
+  state.loading.analytics = true;
+  try {
+    state.analytics = await ChartsService.getAnalytics(range);
+    state.loaded.analytics = true;
+    state.analyticsLoadedRange = range;
+    if (state.currentPage === "analytics") renderAnalytics();
+  } catch (err) {
+    console.warn("Analytics load failed:", err);
+  } finally {
+    state.loading.analytics = false;
+  }
+}
+
+async function loadWatchlist() {
+  if (state.loaded.watchlist || state.loading.watchlist) return state.pinned;
+
+  state.loading.watchlist = true;
+  try {
+    const watchlist = await PostsService.getWatchlist();
+    state.pinned = new Set(watchlist.pinned || []);
+    state.loaded.watchlist = true;
+    if (state.currentPage === "watchlist") renderWatchlist();
+  } catch (err) {
+    console.warn("Watchlist load failed:", err);
+  } finally {
+    state.loading.watchlist = false;
   }
 }
 
@@ -190,9 +315,8 @@ function bindStaticControls() {
   document.getElementById("dashboardRange").addEventListener("change", async e => {
     state.dashboardRange  = e.target.value;
     state.dashboardSummary = buildDashboardSummary(state.posts, state.dashboardRange, state.clusters);
-    state.dashboardComments = await DashboardService.getDashboardComments(state.dashboardRange).catch(() => state.dashboardComments);
+    loadDashboardComments(state.dashboardRange);
     renderDashboard();
-    renderSourceDirectory();
   });
 
   document.getElementById("priorityFilter").addEventListener("change", e => {
@@ -201,8 +325,8 @@ function bindStaticControls() {
 
   document.getElementById("analyticsRange").addEventListener("change", async e => {
     state.analyticsRange = e.target.value;
-    state.analytics       = await ChartsService.getAnalytics(state.analyticsRange).catch(() => state.analytics);
     renderAnalytics();
+    loadAnalytics(state.analyticsRange);
   });
 
   document.getElementById("alertsDateRange").addEventListener("change", e => { state.alerts.dateRange = e.target.value; renderAlerts(); });
@@ -215,12 +339,7 @@ function bindStaticControls() {
   const globalSearch = document.getElementById("globalSearch");
   const applyGlobalSearch = value => {
     state.globalSearch = value;
-    state.dashboardSummary = buildDashboardSummary(state.posts, state.dashboardRange, state.clusters);
-    renderDashboard();
-    renderSourceDirectory();
-    renderAlerts();
-    renderWatchlist();
-    renderClusterDetail();
+    renderCurrentPage({ refreshDashboardSummary: true });
   };
 
   globalSearch.addEventListener("input", e => applyGlobalSearch(e.target.value));
@@ -442,13 +561,37 @@ async function handleDocumentChange(event) {
 // ─── Render (orchestrates all modules) ───────────────────────────────────────
 function renderAll() {
   renderProfileSettings();
-  renderDashboard();
-  renderSourceDirectory();
-  renderAnalytics();
-  renderAlerts();
-  renderWatchlist();
-  renderClusterDetail();
-  setPage(state.currentPage);
+  renderCurrentPage({ refreshDashboardSummary: true });
+}
+
+function renderCurrentPage({ refreshDashboardSummary = false } = {}) {
+  if (refreshDashboardSummary && state.loaded.criticalData) {
+    state.dashboardSummary = buildDashboardSummary(state.posts, state.dashboardRange, state.clusters);
+  }
+
+  if (state.currentPage === "dashboard") {
+    renderDashboard();
+    return;
+  }
+  if (state.currentPage === "analytics") {
+    renderAnalytics();
+    return;
+  }
+  if (state.currentPage === "alerts") {
+    renderAlerts();
+    return;
+  }
+  if (state.currentPage === "watchlist") {
+    renderWatchlist();
+    return;
+  }
+  if (state.currentPage === "cluster-detail") {
+    renderClusterDetail();
+    return;
+  }
+  if (state.currentPage === "settings") {
+    renderProfileSettings();
+  }
 }
 
 // ─── Page Routing ─────────────────────────────────────────────────────────────
@@ -462,7 +605,16 @@ function setPage(page) {
   const title = pageTitles[page];
   document.getElementById("topbarEyebrow").textContent = title.eyebrow;
   document.getElementById("topbarTitle").textContent   = title.title;
-  if (page === "cluster-detail") renderClusterDetail();
+  renderCurrentPage({ refreshDashboardSummary: page === "dashboard" });
+  if (page === "analytics" && !state.loaded.analytics) loadAnalytics(state.analyticsRange);
+  if (page === "analytics" && state.analyticsLoadedRange !== state.analyticsRange) loadAnalytics(state.analyticsRange);
+  if (page === "watchlist" && !state.loaded.watchlist) loadWatchlist();
+  if (page === "dashboard") {
+    if (!state.loaded.keywords) loadKeywords();
+    if (state.dashboardCommentsRange !== state.dashboardRange || !state.loaded.dashboardComments) {
+      loadDashboardComments(state.dashboardRange);
+    }
+  }
   document.body.classList.remove("sidebar-open");
 }
 

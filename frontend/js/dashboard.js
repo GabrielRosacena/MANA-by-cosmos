@@ -139,6 +139,37 @@ function buildMockDashboardComments(posts, range) {
     .slice(0, 6);
 }
 
+function renderLoadingMessage(message) {
+  return `<div class="watch-empty"><strong>${message}</strong></div>`;
+}
+
+function getDashboardViewModel() {
+  const filteredPosts = filterPosts(state.posts, state.dashboardRange, "All", state.globalSearch);
+  const sortedTrendingPosts = [...filteredPosts]
+    .sort((a, b) => (b.severityRank * 1000 + getEngagement(b)) - (a.severityRank * 1000 + getEngagement(a)));
+  const sourceDirectory = [...new Map(filteredPosts.map(p => [p.pageSource, p])).values()].slice(0, 8);
+
+  return {
+    filteredPosts,
+    sortedTrendingPosts,
+    sourceDirectory,
+  };
+}
+
+function renderSourceDirectorySection(sourceDirectory) {
+  document.getElementById("sourceDirectory").innerHTML = sourceDirectory.length ? sourceDirectory.map(post => `
+    <div class="source-item">
+      <div class="source-item-main">
+        <div class="source-badge ${post.source === "Facebook" ? "facebook" : "x"}">${post.source === "Facebook" ? "F" : "X"}</div>
+        <div class="source-item-meta"><strong>${post.pageSource}</strong><span>${post.source}</span></div>
+      </div>
+      <div class="source-count">${formatCompact(getEngagement(post))} interactions</div>
+    </div>
+  `).join("") : (state.loading.criticalData
+    ? renderLoadingMessage("Loading source directory...")
+    : `<div class="watch-empty"><strong>No sources match the current search.</strong></div>`);
+}
+
 // ─── Render: Cluster Nav ──────────────────────────────────────────────────────
 function renderClusterNav() {
   document.getElementById("clusterNav").innerHTML = state.clusters.map(cluster => `
@@ -167,62 +198,58 @@ function renderPriorityPosts(priority) {
 
 // ─── Render: Dashboard ────────────────────────────────────────────────────────
 function renderDashboard() {
+  const { filteredPosts, sortedTrendingPosts, sourceDirectory } = getDashboardViewModel();
   const summaryCards = Array.isArray(state.dashboardSummary) && state.dashboardSummary.length
     ? state.dashboardSummary
     : buildDashboardSummary(state.posts, state.dashboardRange, state.clusters);
 
-  document.getElementById("kpiGrid").innerHTML = summaryCards.map(card => `
+  document.getElementById("kpiGrid").innerHTML = summaryCards.length ? summaryCards.map(card => `
     <div class="mini-card ${kpiToneClass(card.label)}">
       <div class="mini-card-label">${card.label}</div>
       <div class="mini-card-value">${card.value}</div>
       <div class="mini-card-meta">${card.meta}</div>
       <div class="mini-bar"><span style="width:${card.bar}%;"></span></div>
     </div>
-  `).join("");
+  `).join("") : renderLoadingMessage("Loading dashboard summary...");
 
-  document.getElementById("keywordGrid").innerHTML = filterKeywords(state.keywords, state.globalSearch).map(item => `
+  const keywords = filterKeywords(state.keywords, state.globalSearch);
+  document.getElementById("keywordGrid").innerHTML = keywords.length ? keywords.map(item => `
     <div class="keyword-chip">
       <div><strong>${item.keyword}</strong><span>${item.note}</span></div>
       <strong>${formatNumber(item.count)}</strong>
     </div>
-  `).join("") || `<div class="watch-empty"><strong>No keywords match the current search.</strong></div>`;
+  `).join("") : (state.loading.keywords
+    ? renderLoadingMessage("Loading keyword signals...")
+    : `<div class="watch-empty"><strong>No keywords match the current search.</strong></div>`);
 
-  const trendingPosts = filterPosts(state.posts, state.dashboardRange, "All", state.globalSearch)
-    .sort((a, b) => (b.severityRank * 1000 + getEngagement(b)) - (a.severityRank * 1000 + getEngagement(a)))
-    .slice(0, 4);
-  document.getElementById("dashboardPosts").innerHTML = renderPostCards(trendingPosts);
+  document.getElementById("dashboardPosts").innerHTML = state.loading.criticalData && !filteredPosts.length
+    ? renderLoadingMessage("Loading trending posts...")
+    : renderPostCards(sortedTrendingPosts.slice(0, 4));
+
+  renderSourceDirectorySection(sourceDirectory);
 
   const commentCards = Array.isArray(state.dashboardComments) && state.dashboardComments.length
     ? state.dashboardComments
     : buildMockDashboardComments(state.posts, state.dashboardRange);
 
-  document.getElementById("dashboardComments").innerHTML = commentCards.map(c => `
+  document.getElementById("dashboardComments").innerHTML = commentCards.length ? commentCards.map(c => `
     <article class="comment-card">
       <div class="comment-tag">${c.source || "Facebook"} comment</div>
       <small>${c.author || "Facebook user"} on ${c.pageSource || "Facebook Source"} · ${(state.clusters.find(cl => cl.id === c.clusterId) || {}).short || ""}</small>
       <p>${c.text}</p>
       <small>${formatNumber(toCount(c.likes))} likes · From post in ${c.location || "Philippines"}</small>
     </article>
-  `).join("") || `<div class="watch-empty"><strong>No trending comments available.</strong>Import a Facebook comments dataset to populate this panel.</div>`;
+  `).join("") : (state.loading.dashboardComments
+    ? renderLoadingMessage("Loading top comments...")
+    : `<div class="watch-empty"><strong>No trending comments available.</strong>Import a Facebook comments dataset to populate this panel.</div>`);
 
   renderPriorityPosts();
 }
 
 // ─── Render: Source Directory ─────────────────────────────────────────────────
 function renderSourceDirectory() {
-  const sources = [...new Map(
-    filterPosts(state.posts, state.dashboardRange, "All", state.globalSearch).map(p => [p.pageSource, p])
-  ).values()].slice(0, 8);
-
-  document.getElementById("sourceDirectory").innerHTML = sources.map(post => `
-    <div class="source-item">
-      <div class="source-item-main">
-        <div class="source-badge ${post.source === "Facebook" ? "facebook" : "x"}">${post.source === "Facebook" ? "F" : "X"}</div>
-        <div class="source-item-meta"><strong>${post.pageSource}</strong><span>${post.source}</span></div>
-      </div>
-      <div class="source-count">${formatCompact(getEngagement(post))} interactions</div>
-    </div>
-  `).join("") || `<div class="watch-empty"><strong>No sources match the current search.</strong></div>`;
+  const { sourceDirectory } = getDashboardViewModel();
+  renderSourceDirectorySection(sourceDirectory);
 }
 
 // ─── Render: Profile Settings ─────────────────────────────────────────────────
