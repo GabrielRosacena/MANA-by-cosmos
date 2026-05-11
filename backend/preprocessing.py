@@ -7,6 +7,8 @@ Everything below tokenization extends the pipeline for downstream NLP models.
 
 from __future__ import annotations
 
+import json as _json
+import os as _os
 import re
 from html import unescape
 
@@ -37,7 +39,31 @@ WHITESPACE_RE = re.compile(r"\s+")
 LETTER_RE = re.compile(r"[a-zA-Z]")
 EMOJI_ONLY_RE = re.compile(r"^[\s\W_]+$", re.UNICODE)
 _REPEATED_CHAR_RE = re.compile(r"(.)\1{2,}")
-VADER_STRIP_RE = re.compile(r"[^a-zA-Z0-9\s\!\?\.\,\'\:]")
+VADER_STRIP_RE = re.compile(
+    r"[^a-zA-Z0-9\s\!\?\.\,\'\:"
+    r"\U0001F000-\U0001FFFF"   # misc symbols+pictographs, emoticons
+    r"\U00002600-\U000027BF"   # misc symbols, dingbats
+    r"\U00002300-\U000023FF"   # misc technical
+    r"\U000025A0-\U000025FF"   # geometric shapes
+    r"]",
+    re.UNICODE,
+)
+
+# ── Dual-dictionary setup for Tagalog detection ───────────────────────────────
+# Loaded once at import time. Falls back gracefully when files/libraries are absent.
+
+_TAGALOG_DICT_PATH = _os.path.join(_os.path.dirname(__file__), "models", "tagalog_wordlist.json")
+try:
+    with open(_TAGALOG_DICT_PATH, encoding="utf-8") as _f:
+        _tagalog_words: frozenset = frozenset(w.lower() for w in _json.load(_f))
+except Exception:
+    _tagalog_words: frozenset = frozenset()
+
+try:
+    import enchant as _enchant
+    _en_dict = _enchant.Dict("en_US")
+except Exception:
+    _en_dict = None
 
 NEGATION_WORDS = {
     "no", "not", "never", "walang", "hindi", "wala", "cannot", "cant", "can't", "dont", "don't",
@@ -125,7 +151,8 @@ BIGRAM_ALLOWLIST = {
     "class_suspension", "signal_loss", "medical_team", "clean_water",
     "food_pack", "safe_space", "blocked_road", "rescue_boat",
     # cluster-a (Food/NFI)
-    "relief_pack", "canned_goods", "hygiene_kit", "water_refill",
+    # *_good variants guard against heuristic lemmatizer stripping the -s from "goods"
+    "relief_pack", "canned_goods", "canned_good", "relief_good", "hygiene_kit", "water_refill",
     # cluster-b (WASH/Medical)
     "health_center", "first_aid",
     # cluster-c (CCCM)
@@ -221,23 +248,15 @@ def clean_text_for_vader(text: str) -> str:
     """Branch 2B (Sentiment Track): minimal cleaning for VADER.
 
     Preserves casing (ALL CAPS is a VADER intensity signal) and sentiment
-    punctuation (!!!, ? carry weight). Converts emojis to text aliases via
-    emoji.demojize() so VADER's lexicon can score them (e.g. 😢 → :crying_face:).
-    Falls back gracefully if the emoji library is not installed.
+    punctuation (!!!, ? carry weight). Unicode emoji are preserved so VADER
+    can score them from its built-in lexicon (e.g. 😭 → negative signal).
     """
     value = unescape(text or "")
     value = HTML_TAG_RE.sub(" ", value)
     value = URL_RE.sub(" ", value)
     value = MENTION_RE.sub(" ", value)
     value = HASHTAG_RE.sub(r" \1 ", value)
-    # Convert emojis → :text_alias: so VADER can score them via its lexicon.
-    # e.g. 😭 → :loudly_crying_face:   🆘 → :SOS_button:
-    try:
-        import emoji as _emoji_lib
-        value = _emoji_lib.demojize(value, delimiters=(" :", ": "))
-    except ImportError:
-        pass  # emoji lib not installed — raw emojis stripped by VADER_STRIP_RE below
-    # VADER_STRIP_RE keeps letters, digits, spaces, !?.,': (colon for :emoji_name: tokens).
+    # VADER_STRIP_RE keeps letters, digits, spaces, !?.,': and unicode emoji ranges.
     value = VADER_STRIP_RE.sub(" ", value)
     value = WHITESPACE_RE.sub(" ", value).strip()
     return value
@@ -281,11 +300,66 @@ def normalize_informal_tokens(tokens: list[str]) -> list[str]:
     return result
 
 
+def _is_tagalog_word(word: str) -> bool:
+    """Check both the scraped Tagalog wordlist AND TAGALOG_HINTS (union).
+
+    TAGALOG_HINTS is always consulted — it covers na- morphological forms and
+    disaster-domain vocabulary that may be absent from the scraped wordlist.
+    The scraped dictionary extends coverage beyond the 94-word curated set.
+    """
+    w = word.lower()
+    return w in TAGALOG_HINTS or w in _tagalog_words
+
+
+def _is_english_word(word: str) -> bool:
+    """Return True if PyEnchant confirms the word is valid English."""
+    if _en_dict is None:
+        return False
+    try:
+        return _en_dict.check(word)
+    except Exception:
+        return False
+
+
+# Distinctive Filipino verb-form prefixes. Only applied to words NOT confirmed English.
+# Covers: na-past (nasalba, naharang), nag-past (nagbaha), naka-resultative (nakalusot).
+_TAGALOG_MORPHO_PREFIXES = frozenset({"na", "nag", "naka"})
+
+# Fraction of meaningful (len≥3) tokens unknown to both dicts before Rule 3 triggers.
+# Raise to 0.40–0.50 if English posts with acronyms get over-translated.
+_UNKNOWN_RATIO_THRESHOLD = 0.40
+
+
 def should_translate(cleaned_text: str, tokens: list[str]):
     if not cleaned_text or not tokens:
         return False
-    tagalog_hits = sum(1 for token in tokens if token in TAGALOG_HINTS)
-    return tagalog_hits > 0
+
+    meaningful = [t for t in tokens if len(t) >= 3]
+    if not meaningful:
+        return False
+
+    # Rule 1: any confirmed Tagalog word → translate
+    for token in meaningful:
+        if _is_tagalog_word(token):
+            return True
+
+    # Rules 2 & 3 require PyEnchant to safely distinguish English from unknown.
+    # Without it, only Rule 1 fires (fallback to TAGALOG_HINTS behaviour).
+    if _en_dict is not None:
+        for token in meaningful:
+            if _is_english_word(token):
+                continue
+            # Rule 2: Filipino morphological prefix on a non-English word → likely Tagalog
+            w = token.lower()
+            if any(w.startswith(p) and len(w) > len(p) + 1 for p in _TAGALOG_MORPHO_PREFIXES):
+                return True
+
+        # Rule 3: high ratio of words unknown to both dicts → likely Taglish
+        unknown = sum(1 for t in meaningful if not _is_english_word(t))
+        if unknown / len(meaningful) > _UNKNOWN_RATIO_THRESHOLD:
+            return True
+
+    return False
 
 
 def translate_text(cleaned_text: str, translator=None):
@@ -517,38 +591,31 @@ def preprocess_record(
         # raw_text and clean_text are stored unchanged above and are never modified.
         normalized_tokens = normalize_informal_tokens(tokens)
         normalized_clean = " ".join(normalized_tokens)
+        vader_clean = clean_text_for_vader(raw_text)
 
-        translated_text = normalized_clean
+        # Single translation gate: detect once, translate once on vader_clean so that
+        # sentiment cues (caps, emojis, !?.) survive for VADER. ML derives its input
+        # by running clean_text() on the same translated string.
         if should_translate(normalized_clean, normalized_tokens):
             try:
-                translated_text, translation_status, translation_error = translate_text(normalized_clean, translator=translator)
-                result["translated_text"] = translated_text
+                translated_vader, translation_status, translation_error = translate_text(
+                    vader_clean, translator=translator
+                )
+                result["vader_text"] = translated_vader or vader_clean
                 result["translation_status"] = translation_status
                 if translation_status == "translated":
                     result["stats"]["translated"] = 1
                 if translation_error:
                     result["error_message"] = merge_error(result["error_message"], translation_error)
+                result["translated_text"] = clean_text(translated_vader) if translated_vader else normalized_clean
             except Exception as exc:
                 result["translated_text"] = normalized_clean
+                result["vader_text"] = vader_clean
                 result["translation_status"] = "error"
                 result["error_message"] = merge_error(result["error_message"], f"Translation failed: {exc}")
                 result["stats"]["translation_failed"] = 1
         else:
             result["translated_text"] = normalized_clean
-
-        # --- VADER-specific path ---
-        # Detect translation need from lowercased tokens, then translate the
-        # casing-preserved text so VADER receives English with ALL CAPS + !!!  intact.
-        vader_clean = clean_text_for_vader(raw_text)
-        _vt_lower = tokenize_text(vader_clean.lower())
-        _vt_normalized = normalize_informal_tokens(_vt_lower)
-        if should_translate(" ".join(_vt_normalized), _vt_normalized):
-            try:
-                vader_translated, _, _ = translate_text(vader_clean, translator=translator)
-                result["vader_text"] = vader_translated or vader_clean
-            except Exception:
-                result["vader_text"] = vader_clean
-        else:
             result["vader_text"] = vader_clean
 
         # Never store empty string — None is the sentinel for "not yet computed".
@@ -606,6 +673,23 @@ def save_preprocessed_text(
     parent_context_text: str | None = None,
     translator=None,
 ):
+    # Skip re-processing posts that are already fully preprocessed in the DB.
+    # Translation quota is only spent on genuinely new posts; re-importing the
+    # same dataset a second time will not trigger any Google Translate calls.
+    _existing = PreprocessedText.query.filter_by(
+        record_type=record_type, raw_id=str(raw_id or "")
+    ).first()
+    if _existing and _existing.preprocessing_status == "processed":
+        return _existing, {
+            "preprocessing_status": "processed",
+            "is_relevant": _existing.is_relevant,
+            "stats": {
+                "translated": 0, "translation_failed": 0, "negation_handled": 0,
+                "lemmatized": 0, "bigrams_detected": 0, "emotion_only_flagged": 0,
+                "irrelevant_flagged": 0, "errors": 0,
+            },
+        }
+
     processed = preprocess_record(
         raw_id=raw_id,
         item=item,

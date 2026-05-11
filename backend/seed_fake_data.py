@@ -51,6 +51,7 @@ from services.corex.topic_modeler import (
 from services.svm.cluster_classifier import (
     is_model_trained as svm_trained,
     predict_clusters_batch,
+    select_top_cluster,
     train_svm,
 )
 from services.vader.sentiment_analyzer import analyze_post
@@ -484,9 +485,76 @@ FAKE_POSTS = [
         "time": _ts(2, 10),
         "likes": 295, "comments": 60, "shares": 48, "topReactionsCount": 295, "viewsCount": 2200,
     },
+
+    # ── Taglish sandbox test posts — one per cluster ─────────────────────────
+    # Real-world mixed Filipino/English style to validate preprocessing + classification.
+    {
+        "postId": "test-a-001",
+        "text": "Grabe na ang kalagayan dito sa evac center namin sa Marikina. 3 days na kami dito wala pang food pack o relief goods na dumarating. Bata at matanda na halos walang makain. Pls may makapunta dito agad. #ReliefGoods #Marikina #Tulong",
+        "pageName": "Community Updates Marikina",
+        "url": "https://www.facebook.com/test/posts/test-a-001",
+        "time": _ts(0, 7),
+        "likes": 580, "comments": 145, "shares": 112, "topReactionsCount": 580, "viewsCount": 4200,
+    },
+    {
+        "postId": "test-b-001",
+        "text": "May nagkasakit na dito sa aming lugar!! Yung bata lagnat na at nahihirapan huminga. Ospital lang daw ang solusyon pero naka-block pa rin ang daan. May available bang doctor sa area? Wala kaming gamot dito. Kailangan ng medical team ASAP. #Tulong #Sakuna #DOH",
+        "pageName": "Brgy Health Watch",
+        "url": "https://www.facebook.com/test/posts/test-b-001",
+        "time": _ts(0, 8),
+        "likes": 490, "comments": 130, "shares": 95, "topReactionsCount": 490, "viewsCount": 3800,
+    },
+    {
+        "postId": "test-c-001",
+        "text": "UPDATE: Puno na talaga ang evacuation center sa covered court ng Brgy. Tumana! 700+ families na dito, overflowing na. Mga bata nasa labas kasi walang lugar sa loob. Registration desk sobrang overwhelmed. Sana magdala ng dagdag na tent. #EvacCenter #Overcrowded #Marikina",
+        "pageName": "Brgy Tumana Residents",
+        "url": "https://www.facebook.com/test/posts/test-c-001",
+        "time": _ts(0, 9),
+        "likes": 720, "comments": 195, "shares": 150, "topReactionsCount": 720, "viewsCount": 5800,
+    },
+    {
+        "postId": "test-d-001",
+        "text": "DPWH update: Naharang na ang NLEX at Marcos Highway dahil sa pagguho ng lupa sa Montalban. Convoy ng relief goods naka-stranded sa checkpoint. Alternate route via SCTEX lang ang passable ngayon. Mga truck driver mag-reroute na. ETA delayed 4-6 hrs. #Landslide #Convoy #DPWH",
+        "pageName": "DPWH Road Updates NCR",
+        "url": "https://www.facebook.com/test/posts/test-d-001",
+        "time": _ts(0, 6),
+        "likes": 310, "comments": 75, "shares": 65, "topReactionsCount": 310, "viewsCount": 2400,
+    },
+    {
+        "postId": "test-e-001",
+        "text": "WALANG KURYENTE na sa buong Brgy. San Andres simula kahapon!! Brownout na brownout wala pang balita kung kailan ibabalik. Walang signal din Globe at Smart. Paano na yung mga nangangailangan ng communication?? Pls i-restore na ang cell site namin! #PowerOutage #NoSignal #Brownout",
+        "pageName": "Brgy San Andres Updates",
+        "url": "https://www.facebook.com/test/posts/test-e-001",
+        "time": _ts(0, 5),
+        "likes": 650, "comments": 185, "shares": 140, "topReactionsCount": 650, "viewsCount": 5100,
+    },
+    {
+        "postId": "test-f-001",
+        "text": "WALANG PASOK bukas!! Official na galing sa DepEd NCR — class suspended sa lahat ng paaralan sa Marikina at QC dahil sa baha. Pati yung modular classes postponed. Ginagamit na ang school bilang evacuation center ngayon. Stay safe mga students at parents! #WalangPasok #ClassSuspended #DepEd",
+        "pageName": "DepEd NCR Parents Group",
+        "url": "https://www.facebook.com/test/posts/test-f-001",
+        "time": _ts(0, 4),
+        "likes": 1100, "comments": 280, "shares": 250, "topReactionsCount": 1100, "viewsCount": 9500,
+    },
+    {
+        "postId": "test-g-001",
+        "text": "SOS PLEASE HELP KAMI!! Naka-stranded kami sa bubong ng aming bahay dito sa Purok 3 Brgy. Sta. Elena Marikina! 2 pamilya dito, may 4 na bata at isang lola. Pataas pa rin ang tubig. Hindi makarating ang rescue boat!! Tabang tabang!! #SOS #Rescue #Marikina",
+        "pageName": "Emergency PH",
+        "url": "https://www.facebook.com/test/posts/test-g-001",
+        "time": _ts(0, 3),
+        "likes": 2100, "comments": 580, "shares": 420, "topReactionsCount": 2100, "viewsCount": 18000,
+    },
+    {
+        "postId": "test-h-001",
+        "text": "MISSING si Lola Conching, 72 anyos, mula Brgy. Tumana Marikina. Last seen kahapon ng gabi bago pa lumala ang baha. Kung nakita ninyo siya pls contact kami. Nag-file na kami ng missing person report sa barangay. Family tracing coordination desk bukas sa City Hall. Pakishare! #MissingPerson #FamilyTracing #Marikina",
+        "pageName": "Missing Persons PH",
+        "url": "https://www.facebook.com/test/posts/test-h-001",
+        "time": _ts(0, 10),
+        "likes": 1400, "comments": 390, "shares": 340, "topReactionsCount": 1400, "viewsCount": 12000,
+    },
 ]
 
-assert len(FAKE_POSTS) == 50, f"Expected 50 posts, got {len(FAKE_POSTS)}"
+assert len(FAKE_POSTS) == 58, f"Expected 58 posts, got {len(FAKE_POSTS)}"
 
 
 # ── Helper: normalize one Apify-style dict → Post fields ─────────────────────
@@ -618,15 +686,21 @@ def run_svm() -> dict:
         for c in cluster_list:
             db.session.add(PostCluster(post_id=pt.raw_id, cluster_id=c["cluster_id"], confidence=c["confidence"]))
             cluster_rows += 1
-        if cluster_list:
-            post.cluster_id = cluster_list[0]["cluster_id"]
+        top = select_top_cluster(cluster_list)
+        if top:
+            post.cluster_id = top["cluster_id"]
+            post.cluster_label_source = "svm"
     db.session.commit()
     return {**result, "cluster_rows": cluster_rows}
 
 
 def run_vader() -> dict:
     posts = Post.query.all()
-    pt_map = {r.raw_id: r.clean_text for r in PreprocessedText.query.filter_by(record_type="post").all() if r.clean_text}
+    pt_map = {
+        r.raw_id: (r.vader_text or r.clean_text)
+        for r in PreprocessedText.query.filter_by(record_type="post").all()
+        if (r.vader_text or r.clean_text)
+    }
     inserted = updated = 0
     for post in posts:
         text = pt_map.get(post.id) or post.caption or ""

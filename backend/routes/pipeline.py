@@ -22,8 +22,6 @@ from services.corex.topic_modeler import (
     train_corex,
 )
 from services.svm.cluster_classifier import (
-    DEFAULT_MIN_CONFIDENCE,
-    DEFAULT_MIN_MARGIN,
     get_model_status as svm_status,
     is_model_trained as svm_trained,
     predict_clusters_batch,
@@ -141,8 +139,46 @@ def run_all():
         db.session.rollback()
         return jsonify({"error": f"CorEx prediction failed: {exc}", "steps": steps}), 500
 
-    # ── Step 4: SVM train ──────────────────────────────────────────────────────
+    # ── Step 2.5: Re-score heuristic cluster labels using CorEx expanded keywords ─
+    # Loads the keywords CorEx just discovered and re-assigns cluster_id for posts
+    # where the label came from the heuristic (not from a human reviewer).
+    # Human-reviewed labels (cluster_label_source == "reviewed") are never touched.
+    # Failure is non-fatal — SVM training continues with existing labels.
     posts_map = {p.id: p for p in Post.query.filter(Post.id.in_(post_ids)).all()}
+    try:
+        from data import TOPIC_TO_CLUSTER, load_corex_expanded_keywords
+        corex_kw = load_corex_expanded_keywords()
+        corex_relabeled = 0
+        if corex_kw:
+            cluster_keyword_sets: dict[str, set[str]] = {
+                TOPIC_TO_CLUSTER[topic]: {w.lower() for w in words}
+                for topic, words in corex_kw.items()
+                if topic in TOPIC_TO_CLUSTER
+            }
+            for i, pid in enumerate(post_ids):
+                post = posts_map.get(pid)
+                if not post or post.cluster_label_source == "reviewed":
+                    continue
+                tokens_set = set(rows[i].final_tokens)
+                best_cluster_id = None
+                best_score = 0
+                for cluster_id, kw_set in cluster_keyword_sets.items():
+                    score = len(tokens_set & kw_set)
+                    if score > best_score:
+                        best_score = score
+                        best_cluster_id = cluster_id
+                if best_cluster_id and best_score > 0 and post.cluster_id != best_cluster_id:
+                    post.cluster_id = best_cluster_id
+                    post.cluster_label_source = "corex_enriched"
+                    corex_relabeled += 1
+        steps["corex_relabel"] = {
+            "posts_relabeled": corex_relabeled,
+            "topics_available": len(corex_kw),
+        }
+    except Exception as exc:
+        steps["corex_relabel"] = {"error": str(exc), "posts_relabeled": 0}
+
+    # ── Step 4: SVM train ──────────────────────────────────────────────────────
     training_pairs = []
     reviewed_count = heuristic_count = 0
     for i, pid in enumerate(post_ids):
@@ -198,11 +234,7 @@ def run_all():
                     confidence=item["confidence"],
                 ))
                 cluster_inserted += 1
-            top_cluster = select_top_cluster(
-                cluster_list,
-                min_confidence=DEFAULT_MIN_CONFIDENCE,
-                min_margin=DEFAULT_MIN_MARGIN,
-            )
+            top_cluster = select_top_cluster(cluster_list)
             post = posts_map.get(post_id)
             if post and top_cluster and post.cluster_id != top_cluster["cluster_id"]:
                 post.cluster_id = top_cluster["cluster_id"]

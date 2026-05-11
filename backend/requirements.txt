@@ -12,8 +12,5 @@ scikit-learn==1.8.0
 joblib==1.5.3
 numpy==2.4.4
 gunicorn==21.2.0
-
-# --- Optional: emoji demojize for VADER sentiment track (Branch 2B) ---
-# Converts emojis to text aliases (😢 → :crying_face:) so VADER's lexicon can score them.
-# Lightweight (~1 MB). Uncomment to activate; preprocessing.py falls back gracefully if absent.
-# emoji>=2.0.0
+deep_translator>=1.9.2
+pyenchant>=3.2.0

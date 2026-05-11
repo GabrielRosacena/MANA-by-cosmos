@@ -20,7 +20,6 @@ from datetime import datetime, timezone
 import joblib
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import classification_report
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.multiclass import OneVsRestClassifier
@@ -96,7 +95,13 @@ def train_svm(texts: list[str], labels: list[list[str]]) -> dict:
     mlb = MultiLabelBinarizer(classes=CLUSTER_LABELS)
     y = mlb.fit_transform(labels_clean)
 
-    tfidf = TfidfVectorizer(max_features=MAX_FEATURES, sublinear_tf=True, ngram_range=(1, 2))
+    tfidf = TfidfVectorizer(
+        max_features=MAX_FEATURES,
+        sublinear_tf=True,
+        ngram_range=(1, 2),
+        min_df=2,
+        max_df=0.85,
+    )
     X = tfidf.fit_transform(texts_clean)
 
     # Stratified split on the primary (first) label for reproducibility.
@@ -109,7 +114,7 @@ def train_svm(texts: list[str], labels: list[list[str]]) -> dict:
     )
 
     base_clf = OneVsRestClassifier(LinearSVC(max_iter=10000, class_weight="balanced"))
-    param_grid = {"estimator__C": [0.01, 0.1, 1.0, 10.0]}
+    param_grid = {"estimator__C": [0.1, 0.5, 1.0, 3.0]}
 
     # cv=min(5, smallest_class_count) to avoid folds with no positive samples
     min_class_count = int(np.min(y_train.sum(axis=0))) if y_train.shape[0] > 0 else 1
@@ -244,19 +249,46 @@ def predict_clusters_batch(texts: list[str]) -> list[list[dict]]:
     return all_results
 
 
+def _scaled_thresholds() -> tuple[float, float]:
+    """Return (min_confidence, min_margin) scaled to the trained corpus size.
+
+    Smaller corpora produce less-calibrated decision scores, so we relax the
+    thresholds to avoid discarding all SVM predictions on early datasets.
+    Reads corpus_size from svm_meta.json; falls back to strict defaults if the
+    file is missing (keeps existing behaviour when model isn't trained yet).
+    """
+    corpus_size = 0
+    if os.path.exists(_META_PATH):
+        try:
+            with open(_META_PATH, encoding="utf-8") as f:
+                corpus_size = json.load(f).get("corpus_size", 0)
+        except Exception:
+            pass
+    if corpus_size < 50:
+        return 0.55, 0.05
+    if corpus_size < 200:
+        return 0.60, 0.07
+    return DEFAULT_MIN_CONFIDENCE, DEFAULT_MIN_MARGIN
+
+
 def select_top_cluster(
     cluster_list: list[dict],
-    min_confidence: float = DEFAULT_MIN_CONFIDENCE,
-    min_margin: float = DEFAULT_MIN_MARGIN,
+    min_confidence: float | None = None,
+    min_margin: float | None = None,
 ) -> dict | None:
     """
     Return the top cluster only when the prediction is strong enough to trust.
 
-    This prevents low-confidence SVM outputs from overwriting the visible
-    cluster_id that the dashboard depends on.
+    Thresholds scale automatically with the trained corpus size when not
+    provided explicitly — smaller corpora use relaxed thresholds so SVM
+    predictions are not discarded on early datasets.
     """
     if not cluster_list:
         return None
+    if min_confidence is None or min_margin is None:
+        _mc, _mm = _scaled_thresholds()
+        min_confidence = min_confidence if min_confidence is not None else _mc
+        min_margin = min_margin if min_margin is not None else _mm
     ranked = sorted(cluster_list, key=lambda item: item["confidence"], reverse=True)
     top = ranked[0]
     if top["confidence"] < min_confidence:

@@ -6,6 +6,7 @@ Cluster definitions plus lightweight heuristics for imported social posts.
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -481,6 +482,37 @@ CLUSTER_SIGNAL_TERMS = {
         "missing child", "lost contact",
     },
 }
+# Maps CorEx topic labels → NDRRMC cluster IDs.
+# Must stay in sync with TOPIC_LABELS in services/corex/topic_modeler.py.
+TOPIC_TO_CLUSTER: dict[str, str] = {
+    "education":      "cluster-f",
+    "evacuation":     "cluster-c",
+    "rescue":         "cluster-g",
+    "logistics":      "cluster-d",
+    "relief":         "cluster-a",
+    "telecom_power":  "cluster-e",
+    "health_medical": "cluster-b",
+    "dead_missing":   "cluster-h",
+}
+
+_COREX_KEYWORDS_PATH = os.path.join(os.path.dirname(__file__), "models", "corex_keywords.json")
+
+
+def load_corex_expanded_keywords() -> dict[str, list[str]]:
+    """Load CorEx-discovered keywords from the saved model file.
+
+    Returns {topic_label: [word, ...]} or {} if CorEx has not been trained yet.
+    Called by the pipeline to enrich SVM training labels after each CorEx retrain.
+    """
+    if not os.path.exists(_COREX_KEYWORDS_PATH):
+        return {}
+    try:
+        with open(_COREX_KEYWORDS_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
 PRIORITY_ORDER = {"Monitoring": 1, "Moderate": 2, "High": 3, "Critical": 4}
 DISTRESS_TERMS = {
     "urgent": 8,

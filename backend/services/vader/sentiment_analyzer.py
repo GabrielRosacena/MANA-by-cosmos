@@ -24,7 +24,11 @@ _analyzer = SentimentIntensityAnalyzer()
 # MANA cluster IDs that represent inherently negative disaster contexts.
 # Maps to thesis NEGATIVE_TOPICS = {flood, rescue, infrastructure_damage, ...}
 # using MANA's cluster-ID vocabulary instead of CorEx topic names.
-NEGATIVE_CLUSTERS = {"cluster-b", "cluster-c", "cluster-g", "cluster-h"}
+NEGATIVE_CLUSTERS = {
+    "cluster-d",   # Logistics — blocked roads/bridges are objectively negative
+    "cluster-e",   # Telecom/Power — outages are objectively negative
+    "cluster-h",   # MDM — no genuinely positive news about death/missing
+}
 
 # ── Core functions ─────────────────────────────────────────────────────────────
 
@@ -90,19 +94,45 @@ def check_thread_deviation(
     return abs(comment_compound - float(np.mean(thread_compounds))) / std > threshold
 
 
-def analyze_post(text: str, cluster_id: str | None) -> dict:
+_SARCASM_PHRASES = frozenset({
+    "oh great", "oh wow", "how wonderful", "how amazing", "how nice",
+    "how fantastic", "how lovely", "how convenient", "how helpful",
+    "yeah right", "of course it is", "oh perfect", "just perfect",
+    "absolutely perfect", "so great", "so wonderful", "so amazing",
+    "how great", "how perfect", "how nice of",
+})
+
+
+def _check_sarcasm_phrases(text: str) -> bool:
+    """Thesis sarcasm rule 3: exclamatory positive phrases in disaster context."""
+    lowered = (text or "").lower()
+    return any(phrase in lowered for phrase in _SARCASM_PHRASES)
+
+
+def analyze_post(
+    text: str,
+    cluster_id: str | None,
+    thread_compounds: list[float] | None = None,
+) -> dict:
     """
-    High-level helper combining analyze_sentiment + sarcasm incongruence check.
+    High-level helper combining analyze_sentiment + all three sarcasm rules.
 
     Returns a dict ready to be stored in PostSentiment and used to update
     Post.sentiment_score and Post.sentiment_compound.
 
     Keys: compound, positive, negative, neutral, label,
           sentiment_score (int 0-100), sarcasm_flag (bool)
+
+    thread_compounds: sibling comment compounds for Rule 2 (thread deviation).
+    Omit or pass None for posts (Rule 2 fires only with ≥ 3 data points).
     """
     result = analyze_sentiment(text)
     result["sentiment_score"] = compound_to_score(result["compound"])
-    result["sarcasm_flag"] = check_sarcasm_incongruence(result["compound"], cluster_id)
+    result["sarcasm_flag"] = (
+        check_sarcasm_incongruence(result["compound"], cluster_id)
+        or check_thread_deviation(result["compound"], thread_compounds or [])
+        or _check_sarcasm_phrases(text)
+    )
     return result
 
 
