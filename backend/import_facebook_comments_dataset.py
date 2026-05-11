@@ -14,6 +14,7 @@ from pathlib import Path
 
 from app import app, ensure_database
 from data import extract_location, infer_cluster, now_utc
+from facebook_matching import build_post_match_index, find_post_match, normalize_facebook_url
 from models import Comment, Post, db
 from preprocessing import save_preprocessed_text
 
@@ -28,7 +29,7 @@ def safe_int(value):
 def comment_id_for(item: dict):
     fingerprint = "||".join(
         [
-            item.get("facebookUrl") or "",
+            normalize_facebook_url(item.get("facebookUrl") or ""),
             item.get("postTitle") or "",
             item.get("text") or item.get("comment") or item.get("body") or item.get("message") or "",
             str(item.get("likesCount") or "0"),
@@ -67,6 +68,7 @@ def import_items(payload: list[dict]):
 
     ensure_database()
     with app.app_context():
+        post_match_index = build_post_match_index(Post.query.all())
         for item in payload:
             text = (item.get("text") or item.get("comment") or item.get("body") or item.get("message") or "").strip()
             post_url = item.get("facebookUrl") or ""
@@ -91,7 +93,11 @@ def import_items(payload: list[dict]):
                 skipped += 1
                 continue
 
-            post = Post.query.filter_by(source_url=post_url).first()
+            post = find_post_match(
+                post_match_index,
+                url=post_url,
+                external_id=item.get("postId"),
+            )
             normalized = normalize_item(item, post)
             comment = db.session.get(Comment, normalized["id"])
 

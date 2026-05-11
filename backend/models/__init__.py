@@ -150,7 +150,7 @@ class Post(TimestampMixin, db.Model):
     def keywords(self):
         return json.loads(self.keywords_json or "[]")
 
-    def to_api_dict(self):
+    def to_api_dict(self, top_comments=None):
         return {
             "id": self.id,
             "source": self.source,
@@ -178,6 +178,7 @@ class Post(TimestampMixin, db.Model):
             "sourceUrl": self.source_url,
             "mediaType": self.media_type,
             "views": self.views,
+            "topComments": top_comments or [],
         }
 
 

@@ -23,10 +23,10 @@ const state = {
   currentCaptcha:   "",
 
   // Filter state
-  dashboardRange:   "7d",
-  alerts:           { dateRange: "3d", source: "All" },
-  clusterFilters:   { source: "All", severity: "Trending", dateRange: "7d" },
-  analyticsRange:   "14d",
+  dashboardRange:   "30d",
+  alerts:           { dateRange: "30d", source: "All" },
+  clusterFilters:   { source: "All", severity: "Trending", dateRange: "30d" },
+  analyticsRange:   "30d",
   globalSearch:     "",
 
   // User state
@@ -46,17 +46,25 @@ const pageTitles = {
   "cluster-detail":{ eyebrow:"Cluster Detail",   title:"Operational cluster profile" },
 };
 
+let appBootPromise = null;
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
-  hydrateLocalPreferences();
-  applyTheme(state.currentTheme);
-  generateCaptcha();
-  bindStaticControls();
-  updateClock();
-  await loadAppData();
-  renderClusterNav();
-  renderAll();
-  await checkRememberedSession();
+  if (appBootPromise) return appBootPromise;
+
+  appBootPromise = (async () => {
+    hydrateLocalPreferences();
+    applyTheme(state.currentTheme);
+    generateCaptcha();
+    bindStaticControls();
+    updateClock();
+    await checkRememberedSession();
+    await loadAppData();
+    renderClusterNav();
+    renderAll();
+  })();
+
+  return appBootPromise;
 }
 
 async function loadAppData() {

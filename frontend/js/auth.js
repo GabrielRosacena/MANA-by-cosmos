@@ -27,7 +27,7 @@ async function apiLogout() {
   clearToken();
 }
 
-async function apiGetProfile()      { return apiFetch("/auth/me"); }
+async function apiGetProfile()      { return apiFetch("/auth/me", { skipAuthRedirect: true }); }
 async function apiUpdateProfile(u)  { return apiFetch("/auth/me", { method: "PATCH", body: JSON.stringify(u) }); }
 async function apiChangePassword(current, next) {
   return apiFetch("/auth/change-password", {
@@ -95,6 +95,8 @@ async function handleLogin(event) {
   const password = document.getElementById("loginPassword").value.trim();
   const captchaInput = document.getElementById("captchaInput").value.trim().toUpperCase();
   const remember = document.getElementById("rememberSession").checked;
+  const submitBtn = document.querySelector("#loginForm button[type='submit']");
+  const originalLabel = submitBtn?.textContent;
 
   if (!identity || !password) {
     showToast("Sign-in incomplete", "Enter both username/email and password to continue.");
@@ -108,6 +110,11 @@ async function handleLogin(event) {
   }
 
   try {
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Signing in...";
+    }
+
     const result = await AuthService.login(identity, password, remember);
     state.profile = result.user || state.profile;
 
@@ -116,12 +123,14 @@ async function handleLogin(event) {
       return;
     }
 
+    sessionStorage.setItem("mana-active-session", "true");
     if (remember) {
       localStorage.setItem("mana-session", JSON.stringify({ expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 }));
     } else {
       localStorage.removeItem("mana-session");
     }
 
+    if (appBootPromise) await appBootPromise;
     renderProfileSettings();
     showApp();
     showToast("Authenticated", "MANA is now ready for dashboard monitoring.");
@@ -129,21 +138,66 @@ async function handleLogin(event) {
     showToast("Sign-in failed", err.message || "Invalid credentials. Please try again.");
     console.error("Login error:", err);
     generateCaptcha();
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalLabel || "Secure Sign In";
+    }
   }
 }
 
 async function doLogout() {
   await AuthService.logout().catch(() => {});
   localStorage.removeItem("mana-session");
+  sessionStorage.removeItem("mana-active-session");
   showAuthView();
   document.body.classList.remove("sidebar-open", "sidebar-collapsed");
   showToast("Logged out", "You have been signed out of MANA.");
 }
 
 async function checkRememberedSession() {
-  if (!getToken()) return;
+  const savedSession = localStorage.getItem("mana-session");
+  const hasActiveTabSession = sessionStorage.getItem("mana-active-session") === "true";
+
+  if (!savedSession && !hasActiveTabSession) {
+    showAuthView();
+    return;
+  }
+
+  if (savedSession) {
+    try {
+      const parsedSession = JSON.parse(savedSession);
+      if (!parsedSession?.expiresAt || Number(parsedSession.expiresAt) <= Date.now()) {
+        localStorage.removeItem("mana-session");
+        if (!hasActiveTabSession) {
+          clearToken();
+          localStorage.removeItem("mana-admin-token");
+          showAuthView();
+          return;
+        }
+      }
+    } catch (_) {
+      localStorage.removeItem("mana-session");
+      if (!hasActiveTabSession) {
+        clearToken();
+        localStorage.removeItem("mana-admin-token");
+        showAuthView();
+        return;
+      }
+    }
+  }
+
+  const sessionToken = getToken();
+  if (!sessionToken) {
+    localStorage.removeItem("mana-session");
+    localStorage.removeItem("mana-admin-token");
+    sessionStorage.removeItem("mana-active-session");
+    showAuthView();
+    return;
+  }
   try {
     const profile = await AuthService.getProfile();
+    if (getToken() !== sessionToken) return;
     state.profile = {
       username: profile.username,
       name: profile.name || profile.username,
@@ -158,8 +212,12 @@ async function checkRememberedSession() {
     renderProfileSettings();
     showApp();
   } catch (err) {
+    if (getToken() !== sessionToken) return;
+    localStorage.removeItem("mana-session");
+    sessionStorage.removeItem("mana-active-session");
     clearToken();
     localStorage.removeItem("mana-admin-token");
+    showAuthView();
   }
 }
 

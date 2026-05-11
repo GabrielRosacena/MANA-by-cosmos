@@ -5,11 +5,13 @@ MANA — Posts, watchlist, and dashboard routes backed by SQLite.
 from __future__ import annotations
 
 from datetime import timedelta
+from collections import defaultdict
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from data import CLUSTER_DEFINITIONS, now_utc, parse_date_range, top_keywords_from_posts
+from facebook_matching import build_post_match_index, find_post_match
 from models import Comment, Post, Watchlist, db
 
 posts_bp = Blueprint("posts", __name__)
@@ -76,7 +78,53 @@ def get_posts():
         .order_by(Post.date.desc())
         .all()
     )
-    return jsonify([post.to_api_dict() for post in posts])
+    post_ids = [post.id for post in posts]
+    top_comments_by_post_id = defaultdict(list)
+
+    if post_ids:
+        linked_comments = (
+            Comment.query
+            .filter(Comment.post_id.in_(post_ids))
+            .order_by(Comment.date.desc())
+            .all()
+        )
+        orphan_facebook_comments = (
+            Comment.query
+            .filter(Comment.post_id.is_(None), Comment.source == "Facebook")
+            .order_by(Comment.date.desc())
+            .all()
+        )
+        post_lookup = build_post_match_index(posts)
+        comments = list(linked_comments)
+
+        for comment in orphan_facebook_comments:
+            matched_post = find_post_match(post_lookup, url=comment.post_url)
+            if matched_post:
+                comment.post = matched_post
+                comments.append(comment)
+
+        ranked_comments = defaultdict(list)
+        for comment in comments:
+            target_post_id = comment.post_id or getattr(comment.post, "id", None)
+            if target_post_id:
+                ranked_comments[target_post_id].append(comment)
+
+        for post_id, post_comments in ranked_comments.items():
+            top_comments_by_post_id[post_id] = [
+                {
+                    "id": comment.id,
+                    "author": comment.author,
+                    "text": comment.text,
+                    "likes": comment.likes,
+                    "date": comment.date.isoformat() if comment.date else None,
+                }
+                for comment in sorted(post_comments, key=comment_rank, reverse=True)[:3]
+            ]
+
+    return jsonify([
+        post.to_api_dict(top_comments=top_comments_by_post_id.get(post.id, []))
+        for post in posts
+    ])
 
 
 @posts_bp.route("/posts/<post_id>/status", methods=["PATCH"])
