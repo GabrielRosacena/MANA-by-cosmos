@@ -3,14 +3,12 @@ from __future__ import annotations
 import os
 from typing import Any
 
-APIFY_POSTS_TASK_ID_ENV = "APIFY_POSTS_TASK_ID"
-APIFY_COMMENTS_TASK_ID_ENV = "APIFY_COMMENTS_TASK_ID"
+APIFY_FB_ACTOR_TASK_ID_ENV = "APIFY_FB_ACTOR_TASK_ID"
 APIFY_TOKEN_ENV = "APIFY_TOKEN"
 APIFY_WEBHOOK_SECRET_ENV = "APIFY_WEBHOOK_SECRET"
 
-KIND_POSTS = "posts"
-KIND_COMMENTS = "comments"
-VALID_KINDS = {KIND_POSTS, KIND_COMMENTS}
+KIND_FACEBOOK = "facebook"
+VALID_KINDS = {KIND_FACEBOOK}
 
 
 def require_env(name: str) -> str:
@@ -39,11 +37,10 @@ def get_run(run_id: str) -> dict[str, Any]:
 
 
 def get_task_id(kind: str) -> str:
-    if kind == KIND_POSTS:
-        return require_env(APIFY_POSTS_TASK_ID_ENV)
-    if kind == KIND_COMMENTS:
-        return require_env(APIFY_COMMENTS_TASK_ID_ENV)
+    if kind == KIND_FACEBOOK:
+        return require_env(APIFY_FB_ACTOR_TASK_ID_ENV)
     raise RuntimeError(f"Unsupported Apify import kind: {kind}")
+
 
 
 def get_webhook_secret() -> str:
@@ -61,16 +58,30 @@ def list_dataset_items(dataset_id: str) -> list[dict[str, Any]]:
 
 def import_dataset_items(kind: str, dataset_id: str):
     items = list_dataset_items(dataset_id)
-    if kind == KIND_POSTS:
-        from import_facebook_dataset import import_items as import_post_items
-        summary = import_post_items(items)
-    elif kind == KIND_COMMENTS:
-        from import_facebook_comments_dataset import import_items as import_comment_items
-        summary = import_comment_items(items)
-    else:
+
+    if kind != KIND_FACEBOOK:
         raise RuntimeError(f"Unsupported Apify import kind: {kind}")
 
-    return {"kind": kind, "dataset_id": dataset_id, "item_count": len(items), "summary": summary}
+    posts = [item for item in items if item.get("_recordType") == "post"]
+    comments = [item for item in items if item.get("_recordType") == "comment"]
+
+    from import_facebook_dataset import import_items as import_post_items
+    from import_facebook_comments_dataset import import_items as import_comment_items
+
+    post_summary = import_post_items(posts) if posts else {"total_records_loaded": 0}
+    comment_summary = import_comment_items(comments) if comments else {"total_records_loaded": 0}
+
+    return {
+        "kind": kind,
+        "dataset_id": dataset_id,
+        "item_count": len(items),
+        "post_count": len(posts),
+        "comment_count": len(comments),
+        "summary": {
+            "posts": post_summary,
+            "comments": comment_summary,
+        },
+    }
 
 
 def build_ad_hoc_webhook(request_url: str, kind: str, secret: str) -> dict[str, Any]:

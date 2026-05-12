@@ -15,8 +15,7 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required
 from data import now_utc, parse_date_range, priority_label, score_tone
 from models import ActivityLog, Post, SystemSetting, User, db
 from services.apify_integration import (
-    KIND_COMMENTS,
-    KIND_POSTS,
+    KIND_FACEBOOK,
     VALID_KINDS,
     extract_kind,
     get_task_id,
@@ -25,6 +24,7 @@ from services.apify_integration import (
     start_task,
     validate_webhook_secret,
 )
+
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -341,13 +341,24 @@ def update_settings(section):
 @admin_bp.route("/apify/config", methods=["GET"])
 @admin_required
 def get_apify_config():
-    configured = {}
-    for kind in (KIND_POSTS, KIND_COMMENTS):
-        try:
-            configured[kind] = {"taskId": get_task_id(kind), "configured": True}
-        except RuntimeError:
-            configured[kind] = {"taskId": None, "configured": False}
+    try:
+        configured = {
+            KIND_FACEBOOK: {
+                "taskId": get_task_id(KIND_FACEBOOK),
+                "configured": True,
+            }
+        }
+    except RuntimeError:
+        configured = {
+            KIND_FACEBOOK: {
+                "taskId": None,
+                "configured": False,
+            }
+        }
+
     return jsonify({"webhookUrl": public_webhook_url(), "tasks": configured})
+
+
 
 
 @admin_bp.route("/apify/start", methods=["POST"])
