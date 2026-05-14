@@ -865,6 +865,17 @@ def _cluster_c_posts_phivolcs(base_idx: int) -> list[dict]:
         ("Alert Level 3 sa Mayon: Mahigpit na ipinagbabawal ang pagpasok sa 6-km PDZ. Ang mga sumusuway ay pananagutin.", "urgent"),
         ("PHIVOLCS volcano bulletin: Mayon showing continued effusive activity for the 110th consecutive day. Danger zone remains enforced.", "official"),
         ("NDRRMC confirms all residents within Mayon 6-km PDZ have been evacuated. Monitoring continues 24 hours.", "official"),
+        # Real NDRRMC/PHIVOLCS post style — using exact vocabulary from real Apify exports
+        ("LOOK: Close-up footage of minor Strombolian activity at the summit crater of Mayon Volcano captured by PHIVOLCS Quick Response Team. Effusive eruption persists producing incandescent lava flows pyroclastic density currents PDC known as uson and frequent rockfalls. Alert Level 3 remains in effect. Entry into the 6-km Permanent Danger Zone strictly prohibited. Source PHIVOLCS-DOST NDRRMC MayonVolcano.", "urgent"),
+        ("KANLAON WATCH: Close-up footage of minor Strombolian activity at summit crater of Mayon Volcano captured by Mayon Volcano Observatory. Effusive eruption persists for the 110th consecutive day producing incandescent lava flows pyroclastic density currents PDC uson and frequent rockfalls. Alert Level 3 remains in effect. Entry into the 6-km Permanent Danger Zone strictly prohibited. PHIVOLCS-DOST NDRRMC.", "urgent"),
+        ("PHIVOLCS bulletin: Effusive eruption at Mayon Volcano persists for the 111th consecutive day. Incandescent lava flows and rockfalls observed. Pyroclastic density currents uson possible. Alert Level 3. Entry into PDZ strictly prohibited.", "urgent"),
+        ("Mayon Volcano update: Strombolian activity recorded at summit crater. Lava fountain and incandescent rockfalls observed at 6pm tonight. Alert Level 3 maintained. Permanent Danger Zone entry prohibited. Source PHIVOLCS-DOST.", "urgent"),
+        ("NDRRMC BawatSegundoMahalaga: Effusive eruption ng Mayon Volcano ay nagpapatuloy. Incandescent lava flows pyroclastic density currents at rockfalls ang naitala. Alert Level 3 sa Mayon. Ipinagbabawal ang pagpasok sa 6-km PDZ.", "urgent"),
+        ("Kanlaon Watch PHIVOLCS: Minor Strombolian activity observed at Kanlaon summit crater. Lava fragments and incandescent rockfalls recorded. Alert Level 3 raised. Evacuation of 6-km danger zone ordered by NDRRMC.", "urgent"),
+        ("PHIVOLCS-DOST volcano bulletin: Mayon effusive eruption day 112. Lava flow advancing 3km southeast. Pyroclastic density currents PDC generated. Rockfalls frequent. Alert Level 3 in effect. Danger zone access strictly prohibited.", "urgent"),
+        ("Mayon Volcano Observatory: Incandescent lava fountaining recorded at summit crater. PDC uson generated along gullies. Sulfur dioxide emissions elevated. Alert Level 3 remains. Do not enter 6-km Permanent Danger Zone.", "urgent"),
+        ("LOOK: Mayon Volcano lava flow and rockfall footage captured tonight. Effusive eruption continues for consecutive days. Pyroclastic density currents active. PHIVOLCS maintains Alert Level 3. Permanent Danger Zone strictly enforced.", "urgent"),
+        ("NDRRMC advisory on Mayon Volcano: Effusive eruption producing lava flows uson pyroclastic currents and rockfalls. Alert Level 3. All residents within 6-km PDZ must remain evacuated. Do not return without PHIVOLCS clearance.", "urgent"),
     ]
     return [_post(text, cid, base_idx + i, urgency) for i, (text, urgency) in enumerate(templates)]
 
