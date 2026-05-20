@@ -216,7 +216,10 @@ function renderResolvedPostsPanel(postList, emptyMessage, scope = "dashboard") {
 
 function getDashboardViewModel() {
   const filteredPosts = filterPosts(state.posts, state.dashboardRange, "All", state.globalSearch);
-  const sortedTrendingPosts = [...filteredPosts]
+  const dashboardSource = state.dashboardPostsSource || "All";
+  const dashboardPanelPosts = filteredPosts
+    .filter(post => dashboardSource === "All" || post.source === dashboardSource);
+  const sortedTrendingPosts = [...dashboardPanelPosts]
     .sort((a, b) => (b.severityRank * 1000 + getEngagement(b)) - (a.severityRank * 1000 + getEngagement(a)));
   const sourceDirectory = [...new Map(filteredPosts.map(p => [p.pageSource, p])).values()].slice(0, 8);
   const pagination = getDashboardPagination(sortedTrendingPosts.length);
