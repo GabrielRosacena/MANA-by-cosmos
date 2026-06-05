@@ -18,6 +18,7 @@ except ModuleNotFoundError:
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from sqlalchemy import inspect, text
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
@@ -197,6 +198,26 @@ def ensure_post_cluster_label_columns():
     conn.close()
 
 
+def ensure_post_verification_columns():
+    """Add shared verification fields to posts so verification state syncs between users."""
+    inspector = inspect(db.engine)
+    columns = {col["name"] for col in inspector.get_columns("posts")}
+
+    with db.engine.begin() as conn:
+        if "verification_status" not in columns:
+            conn.execute(text("ALTER TABLE posts ADD COLUMN verification_status VARCHAR(32)"))
+        if "verification_note" not in columns:
+            conn.execute(text("ALTER TABLE posts ADD COLUMN verification_note TEXT NOT NULL DEFAULT ''"))
+        if "verification_marked_by" not in columns:
+            conn.execute(text("ALTER TABLE posts ADD COLUMN verification_marked_by VARCHAR(120)"))
+
+        dialect = db.engine.dialect.name
+        if dialect == "sqlite":
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_posts_verification_status ON posts(verification_status)"))
+        elif dialect == "postgresql":
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_posts_verification_status ON posts(verification_status)"))
+
+
 def ensure_preprocessed_text_columns():
     db_path = app.instance_path + "\\mana.db"
     conn = sqlite3.connect(db_path)
@@ -324,12 +345,12 @@ def ensure_database():
         db.create_all()
         if "sqlite" in _db_url:
             # These helpers patch missing columns in an existing SQLite DB.
-            # PostgreSQL uses db.create_all() above, which handles everything.
             ensure_user_columns()
             ensure_preprocessed_text_columns()
             ensure_sentiment_columns()
             ensure_post_cluster_label_columns()
             ensure_post_priority_table()
+        ensure_post_verification_columns()
         seed_clusters()
         seed_default_users()
         seed_settings()
